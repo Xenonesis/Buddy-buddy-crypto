@@ -10,8 +10,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@metamask/sdk": "^0.18.0",
-    "@metamask/sdk-react": "^0.18.0",
     "@types/crypto-js": "^4.2.0",
     "@walletconnect/client": "^1.8.0",
     "@walletconnect/web3-provider": "^1.8.0",
@@ -34,10 +32,17 @@
     "web3": "^4.5.0",
     "zustand": "^4.4.7"
   },
+  "overrides": {
+    "react-native": false,
+    "@metamask/sdk": false,
+    "@metamask/sdk-react": false,
+    "@metamask/sdk-install-modal-web": false
+  },
   "devDependencies": {
     "@eslint/js": "^9.36.0",
-    "@types/react": "^19.1.13",
-    "@types/react-dom": "^19.1.9",
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
     "@vitejs/plugin-react": "^5.0.3",
     "eslint": "^9.36.0",
     "eslint-plugin-react-hooks": "^5.2.0",
