@@ -24,17 +24,20 @@ class EncryptionService {
     const iv = CryptoJS.lib.WordArray.random(this.ivSize / 8);
     const keyWordArray = CryptoJS.enc.Hex.parse(key);
     
-    // Using AES in GCM mode for authenticated encryption
+    // Using AES in CBC mode with HMAC for authenticated encryption
     const encrypted = CryptoJS.AES.encrypt(data, keyWordArray, {
       iv: iv,
-      mode: CryptoJS.mode.GCM,
-      padding: CryptoJS.pad.NoPadding
+      mode: CryptoJS.mode.CBC,
+      padding: CryptoJS.pad.Pkcs7
     });
+
+    // Generate HMAC for authentication
+    const hmac = CryptoJS.HmacSHA256(encrypted.ciphertext.toString(CryptoJS.enc.Hex), keyWordArray);
 
     return {
       iv: iv.toString(CryptoJS.enc.Hex),
       data: encrypted.ciphertext.toString(CryptoJS.enc.Hex),
-      tag: encrypted.tag?.toString(CryptoJS.enc.Hex) || ''
+      tag: hmac.toString(CryptoJS.enc.Hex)
     };
   }
 
@@ -45,17 +48,19 @@ class EncryptionService {
     const ciphertext = CryptoJS.enc.Hex.parse(encryptedData.data);
     const tag = CryptoJS.enc.Hex.parse(encryptedData.tag);
 
+    // Verify HMAC before decryption
+    const expectedHmac = CryptoJS.HmacSHA256(encryptedData.data, keyWordArray).toString(CryptoJS.enc.Hex);
+    if (expectedHmac !== encryptedData.tag) {
+      throw new Error('Authentication failed: Data may have been tampered with');
+    }
+
     const decrypted = CryptoJS.AES.decrypt(
-      {
-        ciphertext: ciphertext,
-        tag: tag,
-        toString: () => encryptedData.data
-      } as any,
+      encryptedData.data,
       keyWordArray,
       {
         iv: iv,
-        mode: CryptoJS.mode.GCM,
-        padding: CryptoJS.pad.NoPadding
+        mode: CryptoJS.mode.CBC,
+        padding: CryptoJS.pad.Pkcs7
       }
     );
 

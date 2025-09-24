@@ -41,8 +41,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-20 bg-black bg-opacity-50 lg:hidden"
             onClick={() => setSidebarOpen(false)}
+            className="fixed inset-0 z-20 bg-black bg-opacity-50 lg:hidden"
           />
         )}
 
@@ -84,6 +84,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                       setActiveTab(item.id);
                       setSidebarOpen(false);
                     }}
+                    type="button"
                     className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left transition-colors ${
                       isActive
                         ? 'bg-primary-500 text-white shadow-lg'
@@ -135,6 +136,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={toggleTheme}
+                  type="button"
                   className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
                 >
                   {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}

@@ -258,7 +258,7 @@ const Recurring: React.FC = () => {
           <motion.div
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e: React.MouseEvent) => e.stopPropagation()}
             className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full"
           >
             <div className="p-6 border-b border-gray-200 dark:border-gray-700">
