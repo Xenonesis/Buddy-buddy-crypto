@@ -24,6 +24,14 @@ class WalletService {
       explorerUrl: 'https://sepolia.etherscan.io',
       isTestnet: true,
       gaslessSupported: true
+    },
+    137: {
+      chainId: 137,
+      name: import.meta.env.VITE_NETWORK_NAME || 'Polygon Mainnet',
+      rpcUrl: import.meta.env.VITE_PUBLIC_RPC_URL || 'https://polygon-rpc.com',
+      explorerUrl: import.meta.env.VITE_BLOCK_EXPLORER_URL || 'https://polygonscan.com',
+      isTestnet: false,
+      gaslessSupported: true
     }
   };
 
@@ -113,8 +121,8 @@ class WalletService {
         rpcUrls: [network.rpcUrl],
         blockExplorerUrls: [network.explorerUrl],
         nativeCurrency: {
-          name: 'ETH',
-          symbol: 'ETH',
+          name: network.chainId === 137 ? 'MATIC' : 'ETH',
+          symbol: network.chainId === 137 ? 'MATIC' : 'ETH',
           decimals: 18
         }
       }],

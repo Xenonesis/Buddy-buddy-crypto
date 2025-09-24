@@ -137,7 +137,7 @@ class NitroLiteService {
 
   // Submit to NitroLite relayer
   private async submitToRelayer(gaslessTransaction: GaslessTransaction): Promise<{ hash: string }> {
-    const relayerUrl = import.meta.env.VITE_NITROLITE_RELAYER_URL || 'https://api.nitrolite.io';
+    const relayerUrl = import.meta.env.VITE_NITROLITE_RELAYER_URL || import.meta.env.VITE_NITROLITE_RELAYER_URL_FALLBACK || 'https://gasless-relay.polygon.technology';
     
     try {
       const response = await fetch(`${relayerUrl}/relay`, {
@@ -226,7 +226,7 @@ class NitroLiteService {
     amount: string,
     tokenAddress?: string
   ): Promise<string> {
-    const relayerUrl = import.meta.env.VITE_NITROLITE_RELAYER_URL || 'https://api.nitrolite.io';
+    const relayerUrl = import.meta.env.VITE_NITROLITE_RELAYER_URL || import.meta.env.VITE_NITROLITE_RELAYER_URL_FALLBACK || 'https://gasless-relay.polygon.technology';
     
     try {
       const response = await fetch(`${relayerUrl}/estimate-fee`, {
@@ -304,7 +304,7 @@ class NitroLiteService {
     activeRelayers: number;
     avgProcessingTime: number;
   }> {
-    const relayerUrl = import.meta.env.VITE_NITROLITE_RELAYER_URL || 'https://api.nitrolite.io';
+    const relayerUrl = import.meta.env.VITE_NITROLITE_RELAYER_URL || import.meta.env.VITE_NITROLITE_RELAYER_URL_FALLBACK || 'https://gasless-relay.polygon.technology';
     
     try {
       const response = await fetch(`${relayerUrl}/stats`);
