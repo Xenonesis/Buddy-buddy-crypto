@@ -120,10 +120,39 @@ export const useAppStore = create<AppState>((set, get) => ({
       let transaction: Transaction;
       
       if (useGasless) {
+        if (!nitroLiteService.isGaslessAvailable()) {
+          throw new Error('Gasless transactions are not available on this network or NitroLite is not properly configured');
+        }
         transaction = await nitroLiteService.executeGaslessTransfer(to, amount);
       } else {
-        // Regular transaction implementation would go here
-        throw new Error('Regular transactions not implemented yet');
+        // Execute regular blockchain transaction
+        const walletService = WalletService.getInstance();
+        const connection = walletService.getConnection();
+        
+        if (!connection || !connection.provider) {
+          throw new Error('Wallet not connected');
+        }
+
+        const provider = new (await import('ethers')).ethers.BrowserProvider(window.ethereum);
+        const signer = await provider.getSigner();
+        
+        const tx = await signer.sendTransaction({
+          to,
+          value: (await import('ethers')).ethers.parseEther(amount)
+        });
+
+        transaction = {
+          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+          hash: tx.hash,
+          from: connection.address,
+          to,
+          amount,
+          token: 'ETH',
+          timestamp: Date.now(),
+          status: 'pending',
+          isGasless: false,
+          network: walletService.getSupportedNetworks().find(n => n.chainId === connection.chainId)?.name || 'Unknown'
+        };
       }
       
       transactionService.addTransaction(transaction);

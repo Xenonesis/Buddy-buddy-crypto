@@ -8,9 +8,9 @@ class NitroLiteService {
   private walletService: WalletService;
   private encryptionService: EncryptionService;
   
-  // NitroLite protocol addresses (placeholder - would be actual deployed contracts)
-  private readonly NITROLITE_RELAYER = '0x1234567890123456789012345678901234567890';
-  private readonly NITROLITE_FORWARDER = '0x0987654321098765432109876543210987654321';
+  // NitroLite protocol addresses from environment variables
+  private readonly NITROLITE_RELAYER = import.meta.env.VITE_NITROLITE_RELAYER_ADDRESS || '';
+  private readonly NITROLITE_FORWARDER = import.meta.env.VITE_NITROLITE_FORWARDER_ADDRESS || '';
 
   static getInstance(): NitroLiteService {
     if (!NitroLiteService.instance) {
@@ -22,6 +22,11 @@ class NitroLiteService {
   constructor() {
     this.walletService = WalletService.getInstance();
     this.encryptionService = EncryptionService.getInstance();
+    
+    // Validate that contract addresses are configured
+    if (!this.NITROLITE_RELAYER || !this.NITROLITE_FORWARDER) {
+      console.warn('NitroLite contract addresses not configured. Gasless transactions may not work properly.');
+    }
   }
 
   // Execute gasless transaction using NitroLite protocol
@@ -132,32 +137,68 @@ class NitroLiteService {
 
   // Submit to NitroLite relayer
   private async submitToRelayer(gaslessTransaction: GaslessTransaction): Promise<{ hash: string }> {
-    // This would connect to the actual NitroLite relayer service
-    // For now, we'll simulate the API call
+    const relayerUrl = import.meta.env.VITE_NITROLITE_RELAYER_URL || 'https://api.nitrolite.io';
     
-    const response = await fetch('/api/nitrolite/relay', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(gaslessTransaction)
-    });
+    try {
+      const response = await fetch(`${relayerUrl}/relay`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(gaslessTransaction)
+      });
 
-    if (!response.ok) {
-      throw new Error('Relayer submission failed');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        throw new Error(`Relayer submission failed: ${errorData.message || response.statusText}`);
+      }
+
+      const result = await response.json();
+      
+      if (!result.hash) {
+        throw new Error('Invalid relayer response: missing transaction hash');
+      }
+
+      return result;
+    } catch (error) {
+      // If relayer is not available, throw meaningful error instead of generating fake hash
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        throw new Error('NitroLite relayer service is currently unavailable. Please try again later.');
+      }
+      throw error;
     }
-
-    // Simulate relayer response
-    return {
-      hash: '0x' + Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('')
-    };
   }
 
   // Get nonce for meta-transaction
   private async getNonce(address: string): Promise<number> {
-    // This would query the forwarder contract for the current nonce
-    // For now, return a simulated nonce
-    return Math.floor(Math.random() * 1000000);
+    const connection = this.walletService.getConnection();
+    if (!connection || !connection.provider) {
+      throw new Error('No wallet connection');
+    }
+
+    if (!this.NITROLITE_FORWARDER) {
+      throw new Error('NitroLite forwarder address not configured');
+    }
+
+    try {
+      // Query the actual forwarder contract for the current nonce
+      const forwarderAbi = [
+        "function getNonce(address from) external view returns (uint256)"
+      ];
+      
+      const forwarderContract = new ethers.Contract(
+        this.NITROLITE_FORWARDER,
+        forwarderAbi,
+        connection.provider
+      );
+
+      const nonce = await forwarderContract.getNonce(address);
+      return Number(nonce);
+    } catch (error) {
+      console.error('Error fetching nonce from forwarder contract:', error);
+      // Fallback to transaction count as nonce
+      return await connection.provider.getTransactionCount(address);
+    }
   }
 
   // Monitor transaction status
@@ -185,20 +226,59 @@ class NitroLiteService {
     amount: string,
     tokenAddress?: string
   ): Promise<string> {
-    // This would query the NitroLite protocol for current relayer fees
-    // For now, return a simulated fee (much lower than regular gas)
-    const baseGasCost = 21000;
-    const gasPrice = ethers.parseUnits('20', 'gwei');
-    const regularFee = baseGasCost * Number(gasPrice);
-    const nitroliteDiscount = 0.05; // 95% discount
+    const relayerUrl = import.meta.env.VITE_NITROLITE_RELAYER_URL || 'https://api.nitrolite.io';
     
-    return ethers.formatEther((BigInt(regularFee) * BigInt(Math.floor(nitroliteDiscount * 100))) / BigInt(100));
+    try {
+      const response = await fetch(`${relayerUrl}/estimate-fee`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          to,
+          amount,
+          tokenAddress
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to estimate gasless transaction fee');
+      }
+
+      const result = await response.json();
+      return result.fee || '0';
+    } catch (error) {
+      console.error('Error estimating gasless transaction fee:', error);
+      
+      // Fallback: calculate a conservative estimate based on current gas prices
+      const connection = this.walletService.getConnection();
+      if (connection && connection.provider) {
+        try {
+          const feeData = await connection.provider.getFeeData();
+          const baseGasCost = 21000;
+          const gasPrice = feeData.gasPrice || ethers.parseUnits('20', 'gwei');
+          const regularFee = BigInt(baseGasCost) * gasPrice;
+          const relayerFee = regularFee / BigInt(20); // 5% of regular gas cost
+          
+          return ethers.formatEther(relayerFee);
+        } catch (gasError) {
+          console.error('Error getting gas price:', gasError);
+        }
+      }
+      
+      return '0';
+    }
   }
 
   // Check if gasless transactions are available for current network
   isGaslessAvailable(): boolean {
     const connection = this.walletService.getConnection();
     if (!connection) return false;
+
+    // Check if contract addresses are configured
+    if (!this.NITROLITE_RELAYER || !this.NITROLITE_FORWARDER) {
+      return false;
+    }
 
     const networks = this.walletService.getSupportedNetworks();
     const currentNetwork = networks.find(n => n.chainId === connection.chainId);
@@ -224,13 +304,33 @@ class NitroLiteService {
     activeRelayers: number;
     avgProcessingTime: number;
   }> {
-    // This would fetch real stats from the NitroLite protocol
-    return {
-      totalGaslessTx: 125430,
-      totalGasSaved: '1,247.82 ETH',
-      activeRelayers: 42,
-      avgProcessingTime: 2.3 // seconds
-    };
+    const relayerUrl = import.meta.env.VITE_NITROLITE_RELAYER_URL || 'https://api.nitrolite.io';
+    
+    try {
+      const response = await fetch(`${relayerUrl}/stats`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch protocol statistics');
+      }
+      
+      const stats = await response.json();
+      
+      return {
+        totalGaslessTx: stats.totalGaslessTx || 0,
+        totalGasSaved: stats.totalGasSaved || '0 ETH',
+        activeRelayers: stats.activeRelayers || 0,
+        avgProcessingTime: stats.avgProcessingTime || 0
+      };
+    } catch (error) {
+      console.error('Error fetching protocol stats:', error);
+      // Return zero stats instead of fake data when service is unavailable
+      return {
+        totalGaslessTx: 0,
+        totalGasSaved: '0 ETH',
+        activeRelayers: 0,
+        avgProcessingTime: 0
+      };
+    }
   }
 }
 
