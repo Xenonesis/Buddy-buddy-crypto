@@ -7,12 +7,12 @@ class WalletService {
   private signer: ethers.JsonRpcSigner | null = null;
   private connection: WalletConnection | null = null;
 
-  // Supported networks
+  // Supported networks - using public RPC endpoints
   private networks: Record<number, NetworkConfig> = {
     1: {
       chainId: 1,
       name: 'Ethereum Mainnet',
-      rpcUrl: 'https://mainnet.infura.io/v3/YOUR_INFURA_KEY',
+      rpcUrl: 'https://eth.llamarpc.com',
       explorerUrl: 'https://etherscan.io',
       isTestnet: false,
       gaslessSupported: true
@@ -20,7 +20,7 @@ class WalletService {
     11155111: {
       chainId: 11155111,
       name: 'Sepolia Testnet',
-      rpcUrl: 'https://sepolia.infura.io/v3/YOUR_INFURA_KEY',
+      rpcUrl: 'https://ethereum-sepolia.publicnode.com',
       explorerUrl: 'https://sepolia.etherscan.io',
       isTestnet: true,
       gaslessSupported: true
@@ -124,6 +124,20 @@ class WalletService {
   // Get current connection
   getConnection(): WalletConnection | null {
     return this.connection;
+  }
+
+  // Refresh wallet balance
+  async refreshBalance(): Promise<void> {
+    if (!this.connection || !this.provider) {
+      return;
+    }
+
+    try {
+      const balance = await this.provider.getBalance(this.connection.address);
+      this.connection.balance = ethers.formatEther(balance);
+    } catch (error) {
+      console.error('Error refreshing wallet balance:', error);
+    }
   }
 
   // Disconnect wallet

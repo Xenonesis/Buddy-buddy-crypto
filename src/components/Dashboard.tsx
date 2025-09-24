@@ -13,9 +13,23 @@ import {
 import { useAppStore } from '../store/app';
 
 const Dashboard: React.FC = () => {
-  const { wallet, transactions } = useAppStore();
+  const { wallet, transactions, refreshData, refreshWalletBalance } = useAppStore();
 
-  // Calculate statistics
+  // Refresh data when component mounts and wallet connects
+  React.useEffect(() => {
+    if (wallet) {
+      refreshData();
+      
+      // Set up periodic balance refresh every 30 seconds
+      const balanceInterval = setInterval(() => {
+        refreshWalletBalance();
+      }, 30000);
+      
+      return () => clearInterval(balanceInterval);
+    }
+  }, [wallet, refreshData, refreshWalletBalance]);
+
+  // Calculate statistics and real-time data
   const stats = React.useMemo(() => {
     const totalTx = transactions.length;
     const gaslessTx = transactions.filter(tx => tx.isGasless).length;
@@ -26,13 +40,36 @@ const Dashboard: React.FC = () => {
       .filter(tx => tx.status === 'confirmed')
       .reduce((sum, tx) => sum + parseFloat(tx.amount), 0);
 
+    // Calculate 24h changes for real data
+    const last24h = Date.now() - (24 * 60 * 60 * 1000);
+    const recent24hTx = transactions.filter(tx => tx.timestamp > last24h && tx.status === 'confirmed');
+    const previous24hStart = last24h - (24 * 60 * 60 * 1000);
+    const previous24hTx = transactions.filter(tx => 
+      tx.timestamp > previous24hStart && 
+      tx.timestamp <= last24h && 
+      tx.status === 'confirmed'
+    );
+    
+    const recent24hVolume = recent24hTx.reduce((sum, tx) => sum + parseFloat(tx.amount), 0);
+    const previous24hVolume = previous24hTx.reduce((sum, tx) => sum + parseFloat(tx.amount), 0);
+    
+    const volumeChange = previous24hVolume > 0 
+      ? (((recent24hVolume - previous24hVolume) / previous24hVolume) * 100).toFixed(1)
+      : recent24hVolume > 0 ? '+100.0' : '0.0';
+    
+    const txCountChange = previous24hTx.length > 0
+      ? (((recent24hTx.length - previous24hTx.length) / previous24hTx.length) * 100).toFixed(1)
+      : recent24hTx.length > 0 ? '+100.0' : '0.0';
+
     return {
       totalTx,
       gaslessTx,
       confirmedTx,
       pendingTx,
       totalVolume: totalVolume.toFixed(4),
-      gaslessPct: totalTx > 0 ? ((gaslessTx / totalTx) * 100).toFixed(1) : '0'
+      gaslessPct: totalTx > 0 ? ((gaslessTx / totalTx) * 100).toFixed(1) : '0',
+      volumeChange: volumeChange.startsWith('-') ? volumeChange : `+${volumeChange}`,
+      txCountChange: txCountChange.startsWith('-') ? txCountChange : `+${txCountChange}`
     };
   }, [transactions]);
 
@@ -42,28 +79,28 @@ const Dashboard: React.FC = () => {
       value: wallet ? `${parseFloat(wallet.balance).toFixed(4)} ETH` : '0.0000 ETH',
       icon: Wallet,
       color: 'bg-blue-500',
-      change: '+2.5%'
+      change: wallet ? 'Live Balance' : 'Connect Wallet'
     },
     {
       title: 'Total Transactions',
       value: stats.totalTx.toString(),
       icon: Activity,
       color: 'bg-green-500',
-      change: `${stats.confirmedTx} confirmed`
+      change: stats.totalTx > 0 ? `${stats.txCountChange}% (24h)` : 'No transactions yet'
     },
     {
       title: 'Gasless Transactions',
       value: `${stats.gaslessPct}%`,
       icon: Zap,
       color: 'bg-purple-500',
-      change: `${stats.gaslessTx} total`
+      change: `${stats.gaslessTx} of ${stats.totalTx} total`
     },
     {
       title: 'Volume Transacted',
       value: `${stats.totalVolume} ETH`,
       icon: DollarSign,
       color: 'bg-orange-500',
-      change: '+15.3%'
+      change: stats.totalVolume !== '0.0000' ? `${stats.volumeChange}% (24h)` : 'No volume yet'
     }
   ];
 

@@ -29,12 +29,30 @@ class TransactionService {
     if (this.monitoring) return;
 
     this.monitoring = true;
+    
+    // Initial scan for transaction history
+    this.scanForNewTransactions();
+    
     this.monitoringInterval = setInterval(async () => {
       await this.checkPendingTransactions();
       await this.scanForNewTransactions();
-    }, 5000); // Check every 5 seconds
+    }, 15000); // Check every 15 seconds (reduced frequency to avoid rate limiting)
 
     console.log('Transaction monitoring started');
+  }
+
+  // Load initial transaction history
+  async loadTransactionHistory(): Promise<void> {
+    const connection = this.walletService.getConnection();
+    if (!connection || !connection.provider) return;
+
+    try {
+      console.log('Loading transaction history...');
+      await this.scanForNewTransactions();
+      console.log(`Loaded ${this.transactions.length} transactions`);
+    } catch (error) {
+      console.error('Error loading transaction history:', error);
+    }
   }
 
   // Stop transaction monitoring
@@ -102,28 +120,91 @@ class TransactionService {
     try {
       // Get latest block
       const latestBlock = await connection.provider.getBlockNumber();
-      const fromBlock = Math.max(0, latestBlock - 100); // Check last 100 blocks
+      const fromBlock = Math.max(0, latestBlock - 1000); // Check last 1000 blocks for more history
 
-      // Get transaction history
-      const history = await connection.provider.getLogs({
-        fromBlock,
-        toBlock: 'latest',
-        topics: [
-          null, // Any event
-          ethers.zeroPadValue(connection.address, 32) // Address as second topic
-        ]
-      });
-
-      // Process new transactions
-      for (const log of history) {
-        await this.processLogEntry(log);
-      }
+      // Scan for outgoing transactions
+      await this.scanOutgoingTransactions(connection, fromBlock, latestBlock);
+      
+      // Scan for incoming transactions (if supported)
+      await this.scanIncomingTransactions(connection, fromBlock, latestBlock);
+      
     } catch (error) {
       console.error('Error scanning for new transactions:', error);
     }
   }
 
-  // Process blockchain log entry
+  // Scan for outgoing transactions
+  private async scanOutgoingTransactions(connection: any, fromBlock: number, toBlock: number): Promise<void> {
+    try {
+      // For Ethereum, we need to check transaction history differently
+      // This is a simplified approach - in production, you'd use indexing services
+      const currentBlock = await connection.provider.getBlockNumber();
+      const startBlock = Math.max(0, currentBlock - 100); // Last 100 blocks
+      
+      for (let blockNumber = startBlock; blockNumber <= currentBlock; blockNumber++) {
+        try {
+          const block = await connection.provider.getBlock(blockNumber, true);
+          if (!block || !block.transactions) continue;
+          
+          for (const tx of block.transactions) {
+            if (tx.from?.toLowerCase() === connection.address.toLowerCase() ||
+                tx.to?.toLowerCase() === connection.address.toLowerCase()) {
+              await this.processTransaction(tx);
+            }
+          }
+        } catch (blockError) {
+          // Skip blocks that can't be fetched
+          continue;
+        }
+      }
+    } catch (error) {
+      console.error('Error scanning outgoing transactions:', error);
+    }
+  }
+
+  // Scan for incoming transactions  
+  private async scanIncomingTransactions(connection: any, fromBlock: number, toBlock: number): Promise<void> {
+    // This would typically use event logs or indexing services
+    // For now, it's handled in scanOutgoingTransactions
+  }
+
+  // Process individual transaction
+  private async processTransaction(tx: any): Promise<void> {
+    const connection = this.walletService.getConnection();
+    if (!connection || !connection.provider) return;
+
+    try {
+      // Check if we already have this transaction
+      const existingTx = this.transactions.find(t => t.hash === tx.hash);
+      if (existingTx) return;
+
+      // Get transaction receipt for more details
+      const receipt = await connection.provider.getTransactionReceipt(tx.hash);
+      const block = await connection.provider.getBlock(tx.blockNumber);
+      
+      // Create new transaction record
+      const newTransaction: Transaction = {
+        id: this.generateTransactionId(),
+        hash: tx.hash,
+        from: tx.from,
+        to: tx.to || '',
+        amount: ethers.formatEther(tx.value || 0),
+        token: 'ETH',
+        timestamp: block ? block.timestamp * 1000 : Date.now(),
+        status: receipt ? (receipt.status === 1 ? 'confirmed' : 'failed') : 'pending',
+        gasUsed: receipt?.gasUsed?.toString() || '0',
+        gasPrice: tx.gasPrice?.toString() || '0',
+        isGasless: false, // Real transactions are not gasless
+        network: this.getNetworkName(connection.chainId)
+      };
+
+      this.addTransaction(newTransaction);
+    } catch (error) {
+      console.error('Error processing transaction:', error);
+    }
+  }
+
+  // Process blockchain log entry (legacy method)
   private async processLogEntry(log: any): Promise<void> {
     const connection = this.walletService.getConnection();
     if (!connection || !connection.provider) return;
@@ -132,27 +213,7 @@ class TransactionService {
       const tx = await connection.provider.getTransaction(log.transactionHash);
       if (!tx) return;
 
-      // Check if we already have this transaction
-      const existingTx = this.transactions.find(t => t.hash === tx.hash);
-      if (existingTx) return;
-
-      // Create new transaction record
-      const newTransaction: Transaction = {
-        id: this.generateTransactionId(),
-        hash: tx.hash,
-        from: tx.from,
-        to: tx.to || '',
-        amount: ethers.formatEther(tx.value),
-        token: 'ETH',
-        timestamp: Date.now(),
-        status: 'confirmed',
-        gasUsed: '0', // Will be updated when receipt is available
-        gasPrice: tx.gasPrice?.toString() || '0',
-        isGasless: false,
-        network: this.getNetworkName(connection.chainId)
-      };
-
-      this.addTransaction(newTransaction);
+      await this.processTransaction(tx);
     } catch (error) {
       console.error('Error processing log entry:', error);
     }

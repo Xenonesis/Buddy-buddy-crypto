@@ -39,6 +39,7 @@ interface AppState {
   removeNotification: (id: string) => void;
   toggleTheme: () => void;
   refreshData: () => void;
+  refreshWalletBalance: () => Promise<void>;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -66,8 +67,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         connection = await walletService.connectWalletConnect();
       }
       
-      // Start transaction monitoring
+      // Start transaction monitoring and load history
       transactionService.startMonitoring();
+      await transactionService.loadTransactionHistory();
       
       set({ 
         wallet: connection,
@@ -204,8 +206,26 @@ export const useAppStore = create<AppState>((set, get) => ({
       const recurringPayments = recurringService.getRecurringPayments();
       
       set({ transactions, recurringPayments });
+      
+      // Also refresh wallet balance
+      get().refreshWalletBalance();
     } catch (error) {
       console.error('Error refreshing data:', error);
+    }
+  },
+
+  refreshWalletBalance: async () => {
+    try {
+      const walletService = WalletService.getInstance();
+      await walletService.refreshBalance();
+      
+      // Update the wallet state with new balance
+      const connection = walletService.getConnection();
+      if (connection) {
+        set({ wallet: connection });
+      }
+    } catch (error) {
+      console.error('Error refreshing wallet balance:', error);
     }
   }
 }));
