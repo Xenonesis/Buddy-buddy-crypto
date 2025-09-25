@@ -1,6 +1,6 @@
-# NitroBridge - Gasless Cryptocurrency Transfers
+# Budget Buddy - Smart Crypto Companion
 
-NitroBridge is a cutting-edge Web3 application that enables gasless cryptocurrency transfers and advanced transaction management using the NitroLite protocol.
+Budget Buddy is a cutting-edge Web3 application that enables smart cryptocurrency management and advanced transaction tracking for better financial planning.
 
 ## 🚀 Features
 
@@ -26,7 +26,7 @@ NitroBridge is a cutting-edge Web3 application that enables gasless cryptocurren
 1. **Clone the repository**
    ```bash
    git clone <repository-url>
-   cd nitrobridge
+   cd budget-buddy
    ```
 
 2. **Install dependencies**
@@ -107,7 +107,7 @@ The application supports:
 
 ## 🔐 Security
 
-NitroBridge implements multiple security layers:
+Budget Buddy implements multiple security layers:
 
 1. **Client-Side Encryption**: All sensitive data is encrypted using AES-GCM
 2. **Zero-Knowledge Proofs**: Transaction privacy without revealing details
@@ -123,7 +123,7 @@ NitroBridge implements multiple security layers:
 
 ## 📊 NitroLite Protocol
 
-NitroBridge leverages the NitroLite protocol for gasless transactions:
+Budget Buddy leverages advanced Web3 technology for smart crypto management:
 
 - **Meta-Transactions**: Users sign transactions without paying gas
 - **Relayer Network**: Decentralized network of relayers execute transactions

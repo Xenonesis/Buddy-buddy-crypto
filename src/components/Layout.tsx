@@ -61,7 +61,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               <div className="flex items-center space-x-2">
                 <div className="w-8 h-8 bg-gradient-to-r from-primary-500 to-secondary-500 rounded-lg"></div>
                 <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-                  NitroBridge
+                  Budget Buddy
                 </h1>
               </div>
               <button

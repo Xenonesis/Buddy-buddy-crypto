@@ -243,7 +243,7 @@ class RecurringPaymentService {
   // Private helper methods
   private loadStoredPayments(): void {
     try {
-      const stored = localStorage.getItem('nitrobridge_recurring_payments');
+      const stored = localStorage.getItem('budget_buddy_recurring_payments');
       if (stored) {
         this.recurringPayments = JSON.parse(stored);
       }
@@ -254,7 +254,7 @@ class RecurringPaymentService {
 
   private savePayments(): void {
     try {
-      localStorage.setItem('nitrobridge_recurring_payments', JSON.stringify(this.recurringPayments));
+      localStorage.setItem('budget_buddy_recurring_payments', JSON.stringify(this.recurringPayments));
     } catch (error) {
       console.error('Error saving recurring payments:', error);
     }

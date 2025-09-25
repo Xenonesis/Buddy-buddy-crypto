@@ -282,7 +282,7 @@ class TransactionService {
   // Private helper methods
   private loadStoredTransactions(): void {
     try {
-      const stored = localStorage.getItem('nitrobridge_transactions');
+      const stored = localStorage.getItem('budget_buddy_transactions');
       if (stored) {
         this.transactions = JSON.parse(stored);
       }
@@ -293,7 +293,7 @@ class TransactionService {
 
   private saveTransactions(): void {
     try {
-      localStorage.setItem('nitrobridge_transactions', JSON.stringify(this.transactions));
+      localStorage.setItem('budget_buddy_transactions', JSON.stringify(this.transactions));
     } catch (error) {
       console.error('Error saving transactions:', error);
     }

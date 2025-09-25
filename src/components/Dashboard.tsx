@@ -115,7 +115,7 @@ const Dashboard: React.FC = () => {
             Dashboard
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Welcome to NitroBridge - Your gasless crypto gateway
+            Welcome to Budget Buddy - Your smart crypto companion
           </p>
         </div>
         

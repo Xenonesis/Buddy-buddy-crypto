@@ -121,7 +121,7 @@ const Send: React.FC = () => {
                 Send Cryptocurrency
               </h1>
               <p className="text-gray-600 dark:text-gray-400">
-                Send ETH instantly with zero gas fees using NitroLite protocol
+                Send ETH with smart transaction management and fee optimization
               </p>
             </div>
           </div>
