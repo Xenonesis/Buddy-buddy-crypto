@@ -2,11 +2,13 @@ import { ethers } from 'ethers';
 import { Transaction, GaslessTransaction, NetworkConfig } from '../types';
 import WalletService from './wallet';
 import EncryptionService from '../utils/encryption';
+import WebSocketService from './websocket';
 
 class NitroLiteService {
   private static instance: NitroLiteService;
-  private walletService: WalletService;
-  private encryptionService: EncryptionService;
+  private readonly walletService: WalletService;
+  private readonly encryptionService: EncryptionService;
+  private readonly wsService: WebSocketService;
   
   // NitroLite protocol addresses from environment variables
   private readonly NITROLITE_RELAYER = import.meta.env.VITE_NITROLITE_RELAYER_ADDRESS || '';
@@ -22,6 +24,7 @@ class NitroLiteService {
   constructor() {
     this.walletService = WalletService.getInstance();
     this.encryptionService = EncryptionService.getInstance();
+    this.wsService = WebSocketService.getInstance();
     
     // Validate that contract addresses are configured
     if (!this.NITROLITE_RELAYER || !this.NITROLITE_FORWARDER) {
@@ -67,6 +70,11 @@ class NitroLiteService {
         network: this.getNetworkName(connection.chainId)
       };
 
+      // Subscribe to transaction updates via WebSocket
+      if (relayerResponse.hash) {
+        this.wsService.requestTransactionUpdates(relayerResponse.hash);
+      }
+
       return transaction;
     } catch (error) {
       console.error('Gasless transaction failed:', error);
@@ -97,7 +105,7 @@ class NitroLiteService {
   // Sign meta-transaction for gasless execution
   private async signMetaTransaction(txData: GaslessTransaction): Promise<string> {
     const connection = this.walletService.getConnection();
-    if (!connection || !connection.provider) {
+    if (!connection?.provider) {
       throw new Error('No wallet connection');
     }
 
@@ -172,7 +180,7 @@ class NitroLiteService {
   // Get nonce for meta-transaction
   private async getNonce(address: string): Promise<number> {
     const connection = this.walletService.getConnection();
-    if (!connection || !connection.provider) {
+    if (!connection?.provider) {
       throw new Error('No wallet connection');
     }
 
@@ -186,10 +194,12 @@ class NitroLiteService {
         "function getNonce(address from) external view returns (uint256)"
       ];
       
+      // Create provider from window.ethereum for contract interaction
+      const provider = new ethers.BrowserProvider(window.ethereum);
       const forwarderContract = new ethers.Contract(
         this.NITROLITE_FORWARDER,
         forwarderAbi,
-        connection.provider
+        provider
       );
 
       const nonce = await forwarderContract.getNonce(address);
@@ -204,7 +214,7 @@ class NitroLiteService {
   // Monitor transaction status
   async monitorTransaction(hash: string): Promise<Transaction['status']> {
     const connection = this.walletService.getConnection();
-    if (!connection || !connection.provider) {
+    if (!connection?.provider) {
       throw new Error('No wallet connection');
     }
 
@@ -226,48 +236,9 @@ class NitroLiteService {
     amount: string,
     tokenAddress?: string
   ): Promise<string> {
-    const relayerUrl = import.meta.env.VITE_NITROLITE_RELAYER_URL || import.meta.env.VITE_NITROLITE_RELAYER_URL_FALLBACK || 'https://gasless-relay.polygon.technology';
-    
-    try {
-      const response = await fetch(`${relayerUrl}/estimate-fee`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          to,
-          amount,
-          tokenAddress
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to estimate gasless transaction fee');
-      }
-
-      const result = await response.json();
-      return result.fee || '0';
-    } catch (error) {
-      console.error('Error estimating gasless transaction fee:', error);
-      
-      // Fallback: calculate a conservative estimate based on current gas prices
-      const connection = this.walletService.getConnection();
-      if (connection && connection.provider) {
-        try {
-          const feeData = await connection.provider.getFeeData();
-          const baseGasCost = 21000;
-          const gasPrice = feeData.gasPrice || ethers.parseUnits('20', 'gwei');
-          const regularFee = BigInt(baseGasCost) * gasPrice;
-          const relayerFee = regularFee / BigInt(20); // 5% of regular gas cost
-          
-          return ethers.formatEther(relayerFee);
-        } catch (gasError) {
-          console.error('Error getting gas price:', gasError);
-        }
-      }
-      
-      return '0';
-    }
+    // Since gasless infrastructure isn't deployed, return 0 for now
+    // In production, this would query the actual relayer service
+    return '0';
   }
 
   // Check if gasless transactions are available for current network
@@ -275,20 +246,14 @@ class NitroLiteService {
     const connection = this.walletService.getConnection();
     if (!connection) return false;
 
-    // Check if contract addresses are configured
-    if (!this.NITROLITE_RELAYER || !this.NITROLITE_FORWARDER) {
-      return false;
-    }
-
-    const networks = this.walletService.getSupportedNetworks();
-    const currentNetwork = networks.find(n => n.chainId === connection.chainId);
-    
-    return currentNetwork?.gaslessSupported || false;
+    // For now, disable gasless transactions since the infrastructure isn't deployed
+    // This prevents users from getting stuck in failed gasless transactions
+    return false;
   }
 
   // Helper methods
   private generateTransactionId(): string {
-    return Date.now().toString() + Math.random().toString(36).substr(2, 9);
+    return Date.now().toString() + Math.random().toString(36).substring(2, 11);
   }
 
   private getNetworkName(chainId: number): string {

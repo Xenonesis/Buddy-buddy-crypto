@@ -10,11 +10,13 @@ import {
   Menu,
   X,
   Sun,
-  Moon
+  Moon,
+  Wifi
 } from 'lucide-react';
 import { useAppStore } from '../store/app';
 import WalletConnection from './WalletConnection';
 import Notifications from './Notifications';
+import WebSocketStatusIndicator from './WebSocketStatusIndicator';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -29,6 +31,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { id: 'send', label: 'Send', icon: Send },
     { id: 'recurring', label: 'Recurring', icon: Clock },
     { id: 'transactions', label: 'Transactions', icon: Activity },
+    { id: 'websocket', label: 'Nitrolite Live', icon: Wifi },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
@@ -142,16 +145,23 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
                 </motion.button>
 
+                {/* WebSocket Status Indicator */}
+                <WebSocketStatusIndicator className="text-sm" />
+
                 {/* Network indicator */}
-                {wallet && (
-                  <div className="flex items-center space-x-2 px-3 py-1 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded-full text-sm">
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                    <span>
-                      {wallet.chainId === 1 ? 'Mainnet' : 
-                       wallet.chainId === 11155111 ? 'Sepolia' : 'Unknown'}
-                    </span>
-                  </div>
-                )}
+                {wallet && (() => {
+                  let networkName = 'Unknown';
+                  if (wallet.chainId === 1) networkName = 'Mainnet';
+                  else if (wallet.chainId === 11155111) networkName = 'Sepolia';
+                  else if (wallet.chainId === 137) networkName = 'Polygon';
+                  
+                  return (
+                    <div className="flex items-center space-x-2 px-3 py-1 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded-full text-sm">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                      <span>{networkName}</span>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </header>
