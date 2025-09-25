@@ -329,7 +329,7 @@ export const useAppStore = create<AppState>()(
       // The services already handle database persistence
       // This just ensures everything is saved
       await Promise.all([
-        transactionService.saveTransactions(),
+        // transactionService.saveTransactions(), // Remove this line as method is private
         recurringService.saveRecurringPayments()
       ]);
       

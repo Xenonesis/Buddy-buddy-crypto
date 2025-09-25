@@ -1,9 +1,14 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Send as SendIcon, Zap, DollarSign, User, AlertTriangle } from 'lucide-react';
+import { Send as SendIcon, Zap, DollarSign, User, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useAppStore } from '../store/app';
 import NitroLiteService from '../services/nitrolite';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Badge } from './ui/badge';
+import { Switch } from './ui/switch';
 
 interface SendFormData {
   recipient: string;
@@ -104,162 +109,205 @@ const Send: React.FC = () => {
   };
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
+    <div className="p-6 max-w-2xl mx-auto space-y-6">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700"
+        transition={{ duration: 0.3 }}
       >
-        {/* Header */}
-        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-center space-x-3">
-            <div className="p-2 bg-primary-100 dark:bg-primary-900 rounded-lg">
-              <SendIcon size={24} className="text-primary-600 dark:text-primary-400" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Send Cryptocurrency
-              </h1>
-              <p className="text-gray-600 dark:text-gray-400">
-                Send ETH with smart transaction management and fee optimization
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6">
-          {/* Recipient Address */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Recipient Address
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <User size={20} className="text-gray-400" />
+        <Card className="overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950 dark:to-purple-950">
+            <div className="flex items-center space-x-3">
+              <div className="p-3 bg-blue-500 rounded-lg">
+                <SendIcon size={24} className="text-white" />
               </div>
-              <input
-                {...register('recipient', { 
-                  required: 'Recipient address is required',
-                  validate: validateAddress
-                })}
-                type="text"
-                placeholder="0x..."
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-            </div>
-            {errors.recipient && (
-              <p className="mt-1 text-sm text-red-600 dark:text-red-400">
-                {errors.recipient.message}
-              </p>
-            )}
-          </div>
-
-          {/* Amount */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Amount (ETH)
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <DollarSign size={20} className="text-gray-400" />
+              <div>
+                <CardTitle className="text-2xl">Send Cryptocurrency</CardTitle>
+                <CardDescription className="text-base">
+                  Send ETH with smart transaction management and fee optimization
+                </CardDescription>
               </div>
-              <input
-                {...register('amount', {
-                  required: 'Amount is required',
-                  validate: validateAmount
-                })}
-                type="number"
-                step="0.000001"
-                placeholder="0.00"
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-              {wallet && (
-                <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
-                    Balance: {parseFloat(wallet.balance).toFixed(4)} ETH
-                  </span>
-                </div>
-              )}
             </div>
-            {errors.amount && (
-              <p className="mt-1 text-sm text-red-600 dark:text-red-400">
-                {errors.amount.message}
-              </p>
-            )}
-          </div>
+          </CardHeader>
 
-          {/* Transaction Type Info */}
-          <div className="bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-700">
-            <div className="flex items-center space-x-2 mb-2">
-              <DollarSign size={16} className="text-blue-600" />
-              <span className="font-medium text-blue-900 dark:text-blue-100">Regular Transaction</span>
-            </div>
-            <p className="text-sm text-blue-700 dark:text-blue-300">
-              Standard blockchain transaction with network gas fees. Gasless transactions are currently unavailable.
-            </p>
-          </div>
-
-          {/* Transaction Summary */}
-          {watchedValues.recipient && watchedValues.amount && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800"
-            >
-              <h3 className="font-medium text-blue-900 dark:text-blue-100 mb-3">
-                Transaction Summary
-              </h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-blue-700 dark:text-blue-300">Amount:</span>
-                  <span className="font-medium text-blue-900 dark:text-blue-100">
-                    {watchedValues.amount} ETH
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-blue-700 dark:text-blue-300">Network Fee:</span>
-                  <span className="font-medium text-blue-900 dark:text-blue-100">
-                    {estimatedFee} ETH
-                  </span>
-                </div>
-                <div className="border-t border-blue-200 dark:border-blue-700 pt-2">
-                  <div className="flex justify-between">
-                    <span className="text-blue-700 dark:text-blue-300">Total:</span>
-                    <span className="font-bold text-blue-900 dark:text-blue-100">
-                      {(parseFloat(watchedValues.amount) + parseFloat(estimatedFee)).toFixed(6)} ETH
-                    </span>
+          <CardContent className="space-y-6">
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+              {/* Recipient Address */}
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.1 }}
+                className="space-y-2"
+              >
+                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                  Recipient Address
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <User size={16} className="text-muted-foreground" />
                   </div>
+                  <Input
+                    {...register('recipient', { 
+                      required: 'Recipient address is required',
+                      validate: validateAddress
+                    })}
+                    type="text"
+                    placeholder="0x..."
+                    className="pl-10"
+                  />
                 </div>
-              </div>
-            </motion.div>
-          )}
+                {errors.recipient && (
+                  <p className="text-sm text-destructive">
+                    {errors.recipient.message}
+                  </p>
+                )}
+              </motion.div>
 
-          {/* Submit Button */}
-          <button
-            type="submit"
-            disabled={!isValid || isTransactionPending || !wallet}
-            className="w-full bg-primary-500 hover:bg-primary-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
-          >
-            {isTransactionPending ? (
-              <>
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                <span>Processing...</span>
-              </>
-            ) : (
-              <>
-                <SendIcon size={20} />
-                <span>Send Transaction</span>
-              </>
-            )}
-          </button>
+              {/* Amount */}
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.2 }}
+                className="space-y-2"
+              >
+                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                  Amount (ETH)
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <DollarSign size={16} className="text-muted-foreground" />
+                  </div>
+                  <Input
+                    {...register('amount', {
+                      required: 'Amount is required',
+                      validate: validateAmount
+                    })}
+                    type="number"
+                    step="0.000001"
+                    placeholder="0.00"
+                    className="pl-10"
+                  />
+                </div>
+                {errors.amount && (
+                  <p className="text-sm text-destructive">
+                    {errors.amount.message}
+                  </p>
+                )}
+                {wallet && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      Available: {parseFloat(wallet.balance).toFixed(4)} ETH
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        const maxAmount = (parseFloat(wallet.balance) * 0.99).toFixed(4);
+                        const form = document.querySelector('input[name="amount"]') as HTMLInputElement;
+                        if (form) form.value = maxAmount;
+                      }}
+                    >
+                      Max
+                    </Button>
+                  </div>
+                )}
+              </motion.div>
 
-          {!wallet && (
-            <p className="text-center text-sm text-gray-600 dark:text-gray-400">
-              Connect your wallet to send transactions
-            </p>
-          )}
-        </form>
+              {/* Transaction Type Info */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className="p-4 rounded-lg border bg-blue-50/50 dark:bg-blue-950/50 border-blue-200 dark:border-blue-800"
+              >
+                <div className="flex items-center space-x-2 mb-2">
+                  <DollarSign size={16} className="text-blue-600 dark:text-blue-400" />
+                  <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                    Regular Transaction
+                  </Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Standard blockchain transaction with network gas fees. Gasless transactions are currently unavailable.
+                </p>
+              </motion.div>
+
+              {/* Transaction Summary */}
+              {watchedValues.recipient && watchedValues.amount && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  transition={{ delay: 0.4 }}
+                >
+                  <Card className="bg-blue-50/50 dark:bg-blue-950/50 border-blue-200 dark:border-blue-800">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-lg flex items-center space-x-2">
+                        <CheckCircle size={18} className="text-blue-600 dark:text-blue-400" />
+                        <span>Transaction Summary</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">Amount:</span>
+                          <Badge variant="outline" className="font-mono">
+                            {watchedValues.amount} ETH
+                          </Badge>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">Network Fee:</span>
+                          <Badge variant="outline" className="font-mono">
+                            {estimatedFee} ETH
+                          </Badge>
+                        </div>
+                        <div className="border-t pt-2">
+                          <div className="flex justify-between items-center">
+                            <span className="font-medium">Total:</span>
+                            <Badge className="font-mono text-base">
+                              {(parseFloat(watchedValues.amount) + parseFloat(estimatedFee)).toFixed(6)} ETH
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )}
+
+              {/* Submit Button */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+              >
+                <Button
+                  type="submit"
+                  disabled={!isValid || isTransactionPending || !wallet}
+                  className="w-full h-12 text-base"
+                  size="lg"
+                >
+                  {isTransactionPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <SendIcon className="mr-2 h-5 w-5" />
+                      Send Transaction
+                    </>
+                  )}
+                </Button>
+
+                {!wallet && (
+                  <p className="text-center text-sm text-muted-foreground mt-4">
+                    Connect your wallet to send transactions
+                  </p>
+                )}
+              </motion.div>
+            </form>
+          </CardContent>
+        </Card>
       </motion.div>
     </div>
   );

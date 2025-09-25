@@ -160,7 +160,7 @@ export const NitroliteRealTimeDemo: React.FC = () => {
         try {
           // Check if already connected to MetaMask
           const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-          if (accounts && accounts.length > 0) {
+          if (accounts && Array.isArray(accounts) && accounts.length > 0) {
             await connectWallet('metamask');
           }
         } catch (error) {
