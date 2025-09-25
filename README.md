@@ -1,25 +1,68 @@
-# Budget Buddy - Smart Crypto Companion
+<div align="center">
 
-Budget Buddy is a cutting-edge Web3 application that enables smart cryptocurrency management and advanced transaction tracking for better financial planning.
+# 🚀 Nitrolite ERC-7824 Real-Time Dashboard
 
-## 🚀 Features
+<img src="https://img.shields.io/badge/ERC--7824-Compatible-blue?style=for-the-badge&logo=ethereum" alt="ERC-7824 Compatible" />
+<img src="https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react" alt="React 18" />
+<img src="https://img.shields.io/badge/TypeScript-5.0-3178C6?style=for-the-badge&logo=typescript" alt="TypeScript" />
+<img src="https://img.shields.io/badge/Vite-5.0-646CFF?style=for-the-badge&logo=vite" alt="Vite" />
+<img src="https://img.shields.io/badge/WebSocket-Live-00D924?style=for-the-badge&logo=websocket" alt="WebSocket" />
 
-### Core Features
-- **Zero-Fee Transactions**: Gasless crypto transfers using NitroLite protocol
-- **MetaMask Authentication**: Secure wallet connection via Yellow SDK
-- **Transaction Monitoring**: Real-time monitoring of all MetaMask wallet transactions
-- **Recurring Payments**: Schedule and manage automated recurring transactions
-- **Privacy-First Design**: AES-GCM encryption and zero-knowledge processing
-- **Multi-Network Support**: Ethereum Mainnet and Sepolia testnet
-- **WalletConnect Integration**: Support for MetaMask, Trust Wallet, and other wallets
+**A cutting-edge real-time blockchain dashboard with auto-wallet detection, live data feeds, and modern glassmorphism UI**
 
-### Technical Highlights
-- Built with React 18, TypeScript, and Vite
-- Responsive design with Tailwind CSS
-- State management with Zustand
-- Smooth animations with Framer Motion
-- Form handling with React Hook Form
-- Real-time updates and monitoring
+[🎯 Features](#-features) • [🚀 Quick Start](#-quick-start) • [🏗️ Architecture](#-architecture) • [📚 Documentation](#-documentation)
+
+---
+
+</div>
+
+## ✨ **What is Nitrolite?**
+
+Nitrolite is a next-generation real-time blockchain dashboard that provides live monitoring of ERC-7824 compatible networks with **automatic wallet detection**, **real-time data feeds**, and a **beautiful modern interface**. Experience Web3 like never before with our glassmorphism design and seamless user experience.
+
+## 🎯 **Features**
+
+<div align="center">
+
+| 🔥 **Core Features** | 🎨 **UI/UX Excellence** | ⚡ **Real-Time Data** |
+|:---:|:---:|:---:|
+| 🤖 Auto Wallet Detection | 🌈 Glassmorphism Design | 📡 Live WebSocket Feeds |
+| 🔗 Auto Connection | 🎭 Framer Motion Animations | 🔗 ClearNode Integration |
+| 💰 Gasless Transactions | 🌙 Dark/Light Mode | 📊 Live Network Stats |
+| 🔄 Recurring Payments | 📱 Responsive Design | ⛽ Real-Time Gas Prices |
+
+</div>
+
+### 🤖 **Intelligent Auto-Detection**
+```typescript
+// Automatically detects and connects to available wallets
+✅ MetaMask Auto-Detection
+✅ Previously Connected Account Recovery  
+✅ Network Auto-Switching
+✅ Balance Auto-Refresh
+```
+
+### 🎨 **Modern UI/UX Design**
+- **🌈 Glassmorphism Interface**: Beautiful backdrop blur effects with translucent cards
+- **🎭 Smooth Animations**: Framer Motion powered transitions and micro-interactions  
+- **📱 Responsive Design**: Optimized for desktop, tablet, and mobile devices
+- **🌙 Theme Support**: Seamless dark/light mode switching
+- **🎯 Interactive Elements**: Hover effects, scale animations, and visual feedback
+
+### ⚡ **Real-Time Data Feeds**
+- **📡 Live WebSocket Connections**: Real-time data from ClearNode and blockchain networks
+- **🔗 Multi-Chain Support**: Ethereum, Polygon, and Sepolia networks
+- **📊 Network Monitoring**: Live block heights, gas prices, and network health
+- **💎 Asset Tracking**: Real-time asset information and price feeds
+- **🔄 Transaction Tracking**: Live transaction status updates and confirmations
+
+### 🛠️ **Technical Excellence**
+- **⚛️ React 18**: Latest React features with concurrent rendering
+- **📘 TypeScript**: Full type safety and enhanced developer experience  
+- **⚡ Vite**: Lightning-fast build tool and development server
+- **🎨 Tailwind CSS**: Utility-first CSS framework for rapid styling
+- **🗃️ Zustand**: Lightweight state management with persistence
+- **🔒 Ethers.js**: Secure blockchain interactions and wallet management
 
 ## 🛠️ Installation
 
