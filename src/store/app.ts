@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { WalletConnection, Transaction, RecurringPayment } from '../types';
 import WalletService from '../services/wallet';
 import TransactionService from '../services/transactions';
@@ -33,16 +34,23 @@ interface AppState {
   connectWallet: (provider: 'metamask' | 'walletconnect') => Promise<void>;
   disconnectWallet: () => void;
   sendTransaction: (to: string, amount: string, useGasless: boolean) => Promise<void>;
-  createRecurringPayment: (to: string, amount: string, frequency: RecurringPayment['frequency']) => void;
+  createRecurringPayment: (to: string, amount: string, frequency: RecurringPayment['frequency']) => Promise<void>;
   setActiveTab: (tab: string) => void;
   addNotification: (notification: Omit<AppState['notifications'][0], 'id' | 'timestamp'>) => void;
   removeNotification: (id: string) => void;
   toggleTheme: () => void;
   refreshData: () => void;
   refreshWalletBalance: () => Promise<void>;
+  initializeUserData: (walletAddress: string) => Promise<void>;
+  saveStateToDatabase: () => Promise<void>;
+  restoreStateFromDatabase: () => Promise<void>;
+  setUnsavedChanges: (hasChanges: boolean) => void;
+  hasUnsavedChanges: boolean;
 }
 
-export const useAppStore = create<AppState>((set, get) => ({
+export const useAppStore = create<AppState>()(
+  persist(
+    (set, get) => ({
   // Initial state
   wallet: null,
   isConnecting: false,
@@ -52,6 +60,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeTab: 'dashboard',
   notifications: [],
   theme: 'light',
+  hasUnsavedChanges: false,
 
   // Actions
   connectWallet: async (provider) => {
@@ -80,6 +89,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         type: 'success',
         message: `Connected to ${provider === 'metamask' ? 'MetaMask' : 'WalletConnect'}`
       });
+      
+      // Initialize user data after connection
+      await get().initializeUserData(connection.address);
       
       // Refresh data after connection
       get().refreshData();
@@ -180,7 +192,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       
       transactionService.addTransaction(transaction);
       
-      set({ isTransactionPending: false });
+      set({ isTransactionPending: false, hasUnsavedChanges: true });
       get().addNotification({
         type: 'success',
         message: `Transaction sent successfully`
@@ -196,16 +208,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  createRecurringPayment: (to, amount, frequency) => {
+  createRecurringPayment: async (to, amount, frequency) => {
     try {
       const recurringService = RecurringPaymentService.getInstance();
-      const payment = recurringService.createRecurringPayment(to, amount, 'ETH', frequency);
+      await recurringService.createRecurringPayment(to, amount, 'ETH', frequency);
       
       get().addNotification({
         type: 'success',
         message: `Recurring payment created successfully`
       });
       
+      set({ hasUnsavedChanges: true });
       get().refreshData();
     } catch (error) {
       get().addNotification({
@@ -266,6 +279,29 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
+  initializeUserData: async (walletAddress: string) => {
+    try {
+      const transactionService = TransactionService.getInstance();
+      const recurringService = RecurringPaymentService.getInstance();
+      
+      // Set user for both services to load data from Supabase
+      await transactionService.setUser(walletAddress);
+      await recurringService.setUser(walletAddress);
+      
+      // Reload data from services
+      const transactions = transactionService.getTransactions();
+      const recurringPayments = recurringService.getRecurringPayments();
+      
+      set({ transactions, recurringPayments });
+    } catch (error) {
+      console.error('Error initializing user data:', error);
+      get().addNotification({
+        type: 'error',
+        message: 'Failed to load user data'
+      });
+    }
+  },
+
   refreshWalletBalance: async () => {
     try {
       const walletService = WalletService.getInstance();
@@ -279,5 +315,71 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch (error) {
       console.error('Error refreshing wallet balance:', error);
     }
+  },
+
+  saveStateToDatabase: async () => {
+    const state = get();
+    if (!state.wallet) return;
+
+    try {
+      // Save current transactions and recurring payments to database
+      const transactionService = TransactionService.getInstance();
+      const recurringService = RecurringPaymentService.getInstance();
+      
+      // The services already handle database persistence
+      // This just ensures everything is saved
+      await Promise.all([
+        transactionService.saveTransactions(),
+        recurringService.saveRecurringPayments()
+      ]);
+      
+      set({ hasUnsavedChanges: false });
+    } catch (error) {
+      console.error('Error saving state to database:', error);
+    }
+  },
+
+  restoreStateFromDatabase: async () => {
+    const state = get();
+    if (!state.wallet) return;
+
+    try {
+      const transactionService = TransactionService.getInstance();
+      const recurringService = RecurringPaymentService.getInstance();
+      
+      // Load data from database
+      await transactionService.loadTransactionsFromDatabase();
+      await recurringService.loadRecurringPaymentsFromDatabase();
+      
+      // Update store with loaded data
+      const transactions = transactionService.getTransactions();
+      const recurringPayments = recurringService.getRecurringPayments();
+      
+      set({ transactions, recurringPayments });
+    } catch (error) {
+      console.error('Error restoring state from database:', error);
+    }
+  },
+
+  setUnsavedChanges: (hasChanges: boolean) => {
+    set({ hasUnsavedChanges: hasChanges });
   }
-}));
+}),
+{
+  name: 'nitrolite-storage',
+  storage: createJSONStorage(() => localStorage),
+  partialize: (state) => ({
+    wallet: state.wallet,
+    activeTab: state.activeTab,
+    theme: state.theme,
+    // Don't persist sensitive data like notifications or pending states
+  }),
+  onRehydrateStorage: () => (state) => {
+    if (state?.wallet) {
+      // Restore wallet connection and data after rehydration
+      state.restoreStateFromDatabase();
+    }
+  }
+}
+  )
+);

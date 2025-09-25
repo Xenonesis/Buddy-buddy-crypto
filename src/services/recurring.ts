@@ -1,13 +1,15 @@
 import { RecurringPayment, Transaction } from '../types';
 import NitroLiteService from './nitrolite';
 import { addDays, addWeeks, addMonths, isBefore } from 'date-fns';
+import { supabase } from '../lib/supabase';
 
 class RecurringPaymentService {
   private static instance: RecurringPaymentService;
-  private nitroLiteService: NitroLiteService;
+  private readonly nitroLiteService: NitroLiteService;
   private recurringPayments: RecurringPayment[] = [];
   private processingInterval: NodeJS.Timeout | null = null;
   private isProcessing: boolean = false;
+  private currentUserId: string | null = null;
 
   static getInstance(): RecurringPaymentService {
     if (!RecurringPaymentService.instance) {
@@ -22,14 +24,84 @@ class RecurringPaymentService {
     this.startProcessing();
   }
 
+  async setUser(walletAddress: string): Promise<void> {
+    try {
+      // Get or create user
+      const { data: user, error } = await supabase
+        .from('users')
+        .select('id')
+        .eq('wallet_address', walletAddress.toLowerCase())
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
+        console.error('Error fetching user:', error);
+        return;
+      }
+
+      if (user) {
+        this.currentUserId = user.id;
+      } else {
+        // Create new user
+        const { data: newUser, error: insertError } = await supabase
+          .from('users')
+          .insert({ wallet_address: walletAddress.toLowerCase() })
+          .select('id')
+          .single();
+
+        if (insertError) {
+          console.error('Error creating user:', insertError);
+          return;
+        }
+        this.currentUserId = newUser.id;
+      }
+
+      // Load existing recurring payments
+      await this.loadRecurringPaymentsFromDatabase();
+    } catch (error) {
+      console.error('Error setting user:', error);
+    }
+  }
+
+  async loadRecurringPaymentsFromDatabase(): Promise<void> {
+    if (!this.currentUserId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('recurring_payments')
+        .select('*')
+        .eq('user_id', this.currentUserId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading recurring payments:', error);
+        return;
+      }
+
+      this.recurringPayments = data.map(payment => ({
+        id: payment.id,
+        to: payment.recipient_address,
+        amount: payment.amount,
+        token: 'ETH', // Default to ETH
+        frequency: payment.frequency as RecurringPayment['frequency'],
+        nextPayment: new Date(payment.next_payment_date).getTime(),
+        isActive: payment.is_active,
+        totalPayments: 0, // Default
+        completedPayments: 0, // Default
+        createdAt: new Date(payment.created_at).getTime()
+      }));
+    } catch (error) {
+      console.error('Error loading recurring payments from database:', error);
+    }
+  }
+
   // Create new recurring payment
-  createRecurringPayment(
+  async createRecurringPayment(
     to: string,
     amount: string,
     token: string,
     frequency: RecurringPayment['frequency'],
     totalPayments: number = 0 // 0 = infinite
-  ): RecurringPayment {
+  ): Promise<RecurringPayment> {
     const payment: RecurringPayment = {
       id: this.generatePaymentId(),
       to,
@@ -42,6 +114,29 @@ class RecurringPaymentService {
       completedPayments: 0,
       createdAt: Date.now()
     };
+
+    // Save to Supabase if user is set
+    if (this.currentUserId) {
+      try {
+        const { error } = await supabase
+          .from('recurring_payments')
+          .insert({
+            id: payment.id,
+            user_id: this.currentUserId,
+            recipient_address: payment.to,
+            amount: payment.amount,
+            frequency: payment.frequency,
+            next_payment_date: new Date(payment.nextPayment).toISOString(),
+            is_active: payment.isActive
+          });
+
+        if (error) {
+          console.error('Error saving recurring payment to database:', error);
+        }
+      } catch (error) {
+        console.error('Error saving recurring payment:', error);
+      }
+    }
 
     this.recurringPayments.push(payment);
     this.savePayments();
@@ -258,6 +353,11 @@ class RecurringPaymentService {
     } catch (error) {
       console.error('Error saving recurring payments:', error);
     }
+  }
+
+  // Public method for saving recurring payments (used by store)
+  saveRecurringPayments(): void {
+    this.savePayments();
   }
 
   private generatePaymentId(): string {

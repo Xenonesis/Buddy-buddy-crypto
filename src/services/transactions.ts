@@ -2,14 +2,16 @@ import { ethers } from 'ethers';
 import { Transaction } from '../types';
 import WalletService from './wallet';
 import EncryptionService from '../utils/encryption';
+import { supabase } from '../lib/supabase';
 
 class TransactionService {
   private static instance: TransactionService;
-  private walletService: WalletService;
-  private encryptionService: EncryptionService;
+  private readonly walletService: WalletService;
+  private readonly encryptionService: EncryptionService;
   private transactions: Transaction[] = [];
   private monitoring: boolean = false;
   private monitoringInterval: NodeJS.Timeout | null = null;
+  private currentUserId: string | null = null;
 
   static getInstance(): TransactionService {
     if (!TransactionService.instance) {
@@ -22,6 +24,78 @@ class TransactionService {
     this.walletService = WalletService.getInstance();
     this.encryptionService = EncryptionService.getInstance();
     this.loadStoredTransactions();
+  }
+
+  async setUser(walletAddress: string): Promise<void> {
+    try {
+      // Get or create user
+      const { data: user, error } = await supabase
+        .from('users')
+        .select('id')
+        .eq('wallet_address', walletAddress.toLowerCase())
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
+        console.error('Error fetching user:', error);
+        return;
+      }
+
+      if (user) {
+        this.currentUserId = user.id;
+      } else {
+        // Create new user
+        const { data: newUser, error: insertError } = await supabase
+          .from('users')
+          .insert({ wallet_address: walletAddress.toLowerCase() })
+          .select('id')
+          .single();
+
+        if (insertError) {
+          console.error('Error creating user:', insertError);
+          return;
+        }
+        this.currentUserId = newUser.id;
+      }
+
+      // Load existing transactions
+      await this.loadTransactionsFromDatabase();
+    } catch (error) {
+      console.error('Error setting user:', error);
+    }
+  }
+
+  async loadTransactionsFromDatabase(): Promise<void> {
+    if (!this.currentUserId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('user_id', this.currentUserId)
+        .order('timestamp', { ascending: false });
+
+      if (error) {
+        console.error('Error loading transactions:', error);
+        return;
+      }
+
+      this.transactions = data.map(tx => ({
+        id: tx.id,
+        hash: tx.hash,
+        from: tx.from_address,
+        to: tx.to_address,
+        amount: tx.value,
+        token: 'ETH', // Assuming ETH for now
+        timestamp: new Date(tx.timestamp).getTime(),
+        status: tx.status as Transaction['status'],
+        gasUsed: tx.gas_limit,
+        gasPrice: tx.gas_price,
+        isGasless: false, // Default to false
+        network: 'Polygon Mainnet' // Default network
+      }));
+    } catch (error) {
+      console.error('Error loading transactions from database:', error);
+    }
   }
 
   // Start real-time transaction monitoring
@@ -69,7 +143,31 @@ class TransactionService {
   }
 
   // Add transaction to monitoring
-  addTransaction(transaction: Transaction): void {
+  async addTransaction(transaction: Transaction): Promise<void> {
+    if (this.currentUserId) {
+      try {
+        const { error } = await supabase
+          .from('transactions')
+          .insert({
+            user_id: this.currentUserId,
+            hash: transaction.hash || '',
+            from_address: transaction.from,
+            to_address: transaction.to,
+            value: transaction.amount,
+            gas_limit: transaction.gasUsed || '21000',
+            gas_price: transaction.gasPrice || '0',
+            status: transaction.status,
+            timestamp: new Date(transaction.timestamp).toISOString()
+          });
+
+        if (error) {
+          console.error('Error saving transaction to database:', error);
+        }
+      } catch (error) {
+        console.error('Error saving transaction:', error);
+      }
+    }
+    
     this.transactions.push(transaction);
     this.saveTransactions();
   }
@@ -198,7 +296,7 @@ class TransactionService {
         network: this.getNetworkName(connection.chainId)
       };
 
-      this.addTransaction(newTransaction);
+      await this.addTransaction(newTransaction);
     } catch (error) {
       console.error('Error processing transaction:', error);
     }
