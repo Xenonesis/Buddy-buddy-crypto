@@ -9,6 +9,7 @@ class WalletService {
   private connection: WalletConnection | null = null;
   private readonly wsService: WebSocketService;
   private balanceSubscriptionId: string | null = null;
+  private connectionStatusCallbacks: ((status: 'connected' | 'disconnected' | 'connecting' | 'error', message?: string) => void)[] = [];
 
   // Supported networks - using public RPC endpoints
   private readonly networks: Record<number, NetworkConfig> = {
@@ -50,13 +51,30 @@ class WalletService {
   }
 
   // Connect to MetaMask
-  async connectMetaMask(): Promise<WalletConnection> {
+  async connectMetaMask(silent: boolean = false): Promise<WalletConnection> {
     if (!window.ethereum) {
-      throw new Error('MetaMask not found. Please install MetaMask extension.');
+      const message = 'MetaMask not found. Please install MetaMask extension.';
+      this.notifyStatusChange('error', message);
+      throw new Error(message);
     }
 
     try {
-      await window.ethereum.request({ method: 'eth_requestAccounts' });
+      if (!silent) {
+        this.notifyStatusChange('connecting', 'Connecting to MetaMask...');
+      }
+
+      // For silent connection, check if already connected
+      let accounts: string[] = [];
+      if (silent) {
+        accounts = await window.ethereum.request({ method: 'eth_accounts' }) as string[];
+        if (accounts.length === 0) {
+          this.notifyStatusChange('disconnected', 'MetaMask not connected');
+          throw new Error('No accounts found. Please connect MetaMask manually.');
+        }
+      } else {
+        accounts = await window.ethereum.request({ method: 'eth_requestAccounts' }) as string[];
+      }
+
       this.provider = new ethers.BrowserProvider(window.ethereum);
       this.signer = await this.provider.getSigner();
       
@@ -79,9 +97,27 @@ class WalletService {
       // Initialize WebSocket connection and subscribe to balance updates
       this.initializeWebSocketConnection();
 
+      const networkName = this.networks[Number(network.chainId)]?.name || `Chain ${network.chainId}`;
+      this.notifyStatusChange('connected', `Connected to MetaMask on ${networkName}`);
+
       return this.connection;
     } catch (error) {
       console.error('MetaMask connection failed:', error);
+      
+      const errorObj = error as { code?: number | string; message?: string };
+      
+      // Handle user rejection of connection
+      if (errorObj?.code === 4001 || 
+          errorObj?.message?.includes('User rejected') ||
+          errorObj?.message?.includes('user rejected')) {
+        const message = 'Connection cancelled - You rejected the connection request in MetaMask';
+        this.notifyStatusChange('error', message);
+        throw new Error(message);
+      }
+      
+      // Handle other errors
+      const message = error instanceof Error ? error.message : 'Failed to connect to MetaMask';
+      this.notifyStatusChange('error', message);
       throw error;
     }
   }
@@ -148,12 +184,20 @@ class WalletService {
   // Refresh wallet balance
   async refreshBalance(): Promise<void> {
     if (!this.connection || !this.provider) {
+      console.log('Cannot refresh balance: no connection or provider');
       return;
     }
 
     try {
+      console.log('Refreshing balance for address:', this.connection.address);
       const balance = await this.provider.getBalance(this.connection.address);
-      this.connection.balance = ethers.formatEther(balance);
+      const formattedBalance = ethers.formatEther(balance);
+      console.log('New balance:', formattedBalance);
+      
+      this.connection.balance = formattedBalance;
+      
+      // Notify status change with updated balance
+      this.notifyStatusChange('connected', `Balance updated: ${formattedBalance} ETH`);
     } catch (error) {
       console.error('Error refreshing wallet balance:', error);
     }
@@ -172,6 +216,74 @@ class WalletService {
       window.ethereum.removeAllListeners('accountsChanged');
       window.ethereum.removeAllListeners('chainChanged');
     }
+
+    this.notifyStatusChange('disconnected', 'Wallet disconnected');
+  }
+
+  // Check if MetaMask is connected without prompting user
+  async checkConnection(): Promise<boolean> {
+    console.log('Checking connection - window.ethereum exists:', !!window.ethereum);
+    
+    if (!window.ethereum) {
+      console.log('window.ethereum is not available');
+      return false;
+    }
+
+    try {
+      console.log('Requesting eth_accounts...');
+      const accounts = await window.ethereum.request({ method: 'eth_accounts' }) as string[];
+      console.log('eth_accounts response:', accounts);
+      return accounts.length > 0;
+    } catch (error) {
+      console.error('Error checking MetaMask connection:', error);
+      return false;
+    }
+  }
+
+  // Attempt to reconnect automatically
+  async autoReconnect(): Promise<WalletConnection | null> {
+    console.log('Starting autoReconnect...');
+    try {
+      const isConnected = await this.checkConnection();
+      console.log('Connection check result:', isConnected);
+      
+      if (isConnected) {
+        console.log('Connection found, attempting silent connection...');
+        const connection = await this.connectMetaMask(true);
+        console.log('Silent connection result:', connection);
+        return connection;
+      } else {
+        console.log('No existing connection found');
+      }
+      return null;
+    } catch (error) {
+      console.error('Auto-reconnection failed:', error);
+      return null;
+    }
+  }
+
+  // Add status change listener
+  onStatusChange(callback: (status: 'connected' | 'disconnected' | 'connecting' | 'error', message?: string) => void): () => void {
+    this.connectionStatusCallbacks.push(callback);
+    
+    // Return unsubscribe function
+    return () => {
+      const index = this.connectionStatusCallbacks.indexOf(callback);
+      if (index > -1) {
+        this.connectionStatusCallbacks.splice(index, 1);
+      }
+    };
+  }
+
+  // Notify status change
+  private notifyStatusChange(status: 'connected' | 'disconnected' | 'connecting' | 'error', message?: string): void {
+    this.connectionStatusCallbacks.forEach(callback => {
+      try {
+        callback(status, message);
+      } catch (error) {
+        console.error('Error in status change callback:', error);
+      }
+    });
   }
 
   // Get supported networks

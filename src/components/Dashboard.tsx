@@ -17,6 +17,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Progress } from './ui/progress';
+import WalletDebug from './WalletDebug';
 
 const Dashboard: React.FC = () => {
   const { wallet, transactions, refreshData, refreshWalletBalance } = useAppStore();
@@ -136,6 +137,11 @@ const Dashboard: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Debug Component - Only show if wallet is not connected */}
+      {!wallet && (
+        <WalletDebug />
+      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

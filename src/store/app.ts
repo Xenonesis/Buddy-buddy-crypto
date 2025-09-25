@@ -10,6 +10,8 @@ interface AppState {
   // Wallet state
   wallet: WalletConnection | null;
   isConnecting: boolean;
+  connectionStatus: 'disconnected' | 'connecting' | 'connected' | 'error';
+  connectionMessage: string;
   
   // Transaction state
   transactions: Transaction[];
@@ -33,6 +35,8 @@ interface AppState {
   // Actions
   connectWallet: (provider: 'metamask' | 'walletconnect') => Promise<void>;
   disconnectWallet: () => void;
+  autoReconnectWallet: () => Promise<void>;
+  handleTransactionError: (error: unknown) => { type: 'success' | 'error' | 'warning' | 'info'; message: string };
   sendTransaction: (to: string, amount: string, useGasless: boolean) => Promise<void>;
   createRecurringPayment: (to: string, amount: string, frequency: RecurringPayment['frequency']) => Promise<void>;
   setActiveTab: (tab: string) => void;
@@ -54,6 +58,8 @@ export const useAppStore = create<AppState>()(
   // Initial state
   wallet: null,
   isConnecting: false,
+  connectionStatus: 'disconnected',
+  connectionMessage: 'Not connected',
   transactions: [],
   isTransactionPending: false,
   recurringPayments: [],
@@ -64,14 +70,25 @@ export const useAppStore = create<AppState>()(
 
   // Actions
   connectWallet: async (provider) => {
-    set({ isConnecting: true });
+    set({ isConnecting: true, connectionStatus: 'connecting' });
+    
+    const walletService = WalletService.getInstance();
+    
+    // Set up status change listener
+    const unsubscribe = walletService.onStatusChange((status, message) => {
+      console.log('Wallet status changed:', status, message);
+      set({ 
+        connectionStatus: status,
+        connectionMessage: message || ''
+      });
+    });
+    
     try {
-      const walletService = WalletService.getInstance();
       const transactionService = TransactionService.getInstance();
       
       let connection: WalletConnection;
       if (provider === 'metamask') {
-        connection = await walletService.connectMetaMask();
+        connection = await walletService.connectMetaMask(false);
       } else {
         connection = await walletService.connectWalletConnect();
       }
@@ -82,7 +99,9 @@ export const useAppStore = create<AppState>()(
       
       set({ 
         wallet: connection,
-        isConnecting: false
+        isConnecting: false,
+        connectionStatus: 'connected',
+        connectionMessage: `Connected to ${provider === 'metamask' ? 'MetaMask' : 'WalletConnect'}`
       });
       
       get().addNotification({
@@ -96,10 +115,83 @@ export const useAppStore = create<AppState>()(
       // Refresh data after connection
       get().refreshData();
     } catch (error) {
-      set({ isConnecting: false });
+      console.error('Connection failed:', error);
+      set({ 
+        isConnecting: false,
+        connectionStatus: 'error',
+        connectionMessage: error instanceof Error ? error.message : 'Connection failed'
+      });
       get().addNotification({
         type: 'error',
         message: `Failed to connect: ${error instanceof Error ? error.message : 'Unknown error'}`
+      });
+    }
+  },
+
+  autoReconnectWallet: async () => {
+    console.log('Attempting auto-reconnection...');
+    
+    const walletService = WalletService.getInstance();
+    
+    // Set up status change listener
+    const unsubscribe = walletService.onStatusChange((status, message) => {
+      console.log('Auto-reconnect status change:', status, message);
+      set({ 
+        connectionStatus: status,
+        connectionMessage: message || ''
+      });
+    });
+    
+    try {
+      // First check if MetaMask is available
+      if (!window.ethereum) {
+        console.log('MetaMask not available');
+        set({ 
+          connectionStatus: 'disconnected',
+          connectionMessage: 'MetaMask not installed'
+        });
+        return;
+      }
+      
+      const connection = await walletService.autoReconnect();
+      
+      if (connection) {
+        console.log('Auto-reconnection successful:', connection.address);
+        
+        const transactionService = TransactionService.getInstance();
+        
+        // Start transaction monitoring and load history
+        transactionService.startMonitoring();
+        await transactionService.loadTransactionHistory();
+        
+        set({ 
+          wallet: connection,
+          connectionStatus: 'connected',
+          connectionMessage: `Auto-connected to MetaMask`
+        });
+        
+        get().addNotification({
+          type: 'success',
+          message: 'Automatically reconnected to MetaMask'
+        });
+        
+        // Initialize user data after connection
+        await get().initializeUserData(connection.address);
+        
+        // Refresh data after connection
+        get().refreshData();
+      } else {
+        console.log('Auto-reconnection failed: No connection returned');
+        set({ 
+          connectionStatus: 'disconnected',
+          connectionMessage: 'MetaMask not connected'
+        });
+      }
+    } catch (error) {
+      console.error('Auto-reconnection failed:', error);
+      set({ 
+        connectionStatus: 'error',
+        connectionMessage: error instanceof Error ? error.message : 'Auto-reconnection failed'
       });
     }
   },
@@ -114,7 +206,9 @@ export const useAppStore = create<AppState>()(
     set({ 
       wallet: null,
       transactions: [],
-      recurringPayments: []
+      recurringPayments: [],
+      connectionStatus: 'disconnected',
+      connectionMessage: 'Not connected'
     });
     
     get().addNotification({
@@ -123,59 +217,135 @@ export const useAppStore = create<AppState>()(
     });
   },
 
+  // Helper function to handle transaction errors
+  handleTransactionError: (error: unknown) => {
+    console.error('Transaction error details:', error);
+    
+    const errorObj = error as { 
+      code?: number | string; 
+      message?: string; 
+      cause?: { code?: number }; 
+      info?: { error?: { code?: number } };
+    };
+    
+    // Check for user rejection (MetaMask)
+    if (errorObj?.code === 4001 || 
+        errorObj?.code === 'ACTION_REJECTED' || 
+        errorObj?.message?.includes('User denied') ||
+        errorObj?.message?.includes('user rejected') ||
+        errorObj?.cause?.code === 4001 ||
+        errorObj?.info?.error?.code === 4001) {
+      return {
+        type: 'warning' as const,
+        message: 'Transaction cancelled - You rejected the transaction in MetaMask'
+      };
+    }
+    
+    // Check for insufficient funds
+    if (errorObj?.message?.includes('insufficient funds') || 
+        errorObj?.message?.includes('Insufficient balance')) {
+      return {
+        type: 'error' as const,
+        message: 'Insufficient balance to complete this transaction'
+      };
+    }
+    
+    // Check for gas estimation errors
+    if (errorObj?.message?.includes('gas') || 
+        errorObj?.message?.includes('Gas')) {
+      return {
+        type: 'error' as const,
+        message: 'Transaction failed due to gas estimation error. Please try again.'
+      };
+    }
+    
+    // Check for network errors
+    if (errorObj?.message?.includes('network') || 
+        errorObj?.message?.includes('Network')) {
+      return {
+        type: 'error' as const,
+        message: 'Network error. Please check your connection and try again.'
+      };
+    }
+    
+    // Default error message
+    const message = errorObj?.message || 'Unknown transaction error';
+    return {
+      type: 'error' as const,
+      message: `Transaction failed: ${message}`
+    };
+  },
+
   sendTransaction: async (to, amount, useGasless) => {
+    console.log('Starting transaction:', { to, amount, useGasless });
     set({ isTransactionPending: true });
+    
     try {
-      const nitroLiteService = NitroLiteService.getInstance();
-      const transactionService = TransactionService.getInstance();
-      
-      let transaction: Transaction;
-      
-      // Always use regular transactions since gasless infrastructure isn't deployed
       const walletService = WalletService.getInstance();
+      const transactionService = TransactionService.getInstance();
       const connection = walletService.getConnection();
       
-      if (!connection || !connection.provider) {
+      if (!connection) {
         throw new Error('Wallet not connected');
       }
 
+      if (!window.ethereum) {
+        throw new Error('MetaMask not available');
+      }
+
+      console.log('Current wallet balance:', connection.balance);
+
+      // Validate inputs
+      if (!to || !amount) {
+        throw new Error('Invalid transaction parameters');
+      }
+
       // Validate amount
-      const amountWei = (await import('ethers')).ethers.parseEther(amount);
-      const balanceWei = (await import('ethers')).ethers.parseEther(connection.balance);
+      const ethers = await import('ethers');
+      const amountWei = ethers.ethers.parseEther(amount);
+      const balanceWei = ethers.ethers.parseEther(connection.balance);
+      
+      console.log('Amount in Wei:', amountWei.toString());
+      console.log('Balance in Wei:', balanceWei.toString());
       
       if (amountWei > balanceWei) {
         throw new Error('Insufficient balance for this transaction');
       }
 
-      // Create provider and signer
-      const provider = new (await import('ethers')).ethers.BrowserProvider(window.ethereum);
+      // Create fresh provider and signer
+      const provider = new ethers.ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       
-      // Get current gas price for better UX
+      // Get gas estimation
+      const gasLimit = 21000n; // Standard ETH transfer
       const feeData = await provider.getFeeData();
-      const gasLimit = 21000; // Standard ETH transfer
-      const gasPrice = feeData.gasPrice;
+      const gasPrice = feeData.gasPrice || ethers.ethers.parseUnits('20', 'gwei');
       
-      if (!gasPrice) {
-        throw new Error('Unable to estimate gas price');
-      }
-
-      const gasCost = BigInt(gasLimit) * gasPrice;
+      console.log('Gas price:', gasPrice.toString());
+      
+      const gasCost = gasLimit * gasPrice;
       const totalCost = amountWei + gasCost;
       
+      console.log('Gas cost:', ethers.ethers.formatEther(gasCost));
+      console.log('Total cost:', ethers.ethers.formatEther(totalCost));
+      
       if (totalCost > balanceWei) {
-        throw new Error('Insufficient balance to cover transaction amount and gas fees');
+        throw new Error(`Insufficient balance. Need ${ethers.ethers.formatEther(totalCost)} ETH but only have ${connection.balance} ETH`);
       }
 
+      console.log('Sending transaction...');
+      
       // Send the transaction
       const tx = await signer.sendTransaction({
         to,
         value: amountWei,
-        gasLimit,
+        gasLimit: Number(gasLimit),
         gasPrice
       });
 
-      transaction = {
+      console.log('Transaction sent:', tx.hash);
+
+      const transaction: Transaction = {
         id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
         hash: tx.hash,
         from: connection.address,
@@ -184,7 +354,7 @@ export const useAppStore = create<AppState>()(
         token: 'ETH',
         timestamp: Date.now(),
         status: 'pending',
-        isGasless: false, // Always false since we're not using gasless
+        isGasless: false,
         gasUsed: gasLimit.toString(),
         gasPrice: gasPrice.toString(),
         network: walletService.getSupportedNetworks().find(n => n.chainId === connection.chainId)?.name || 'Unknown'
@@ -195,16 +365,21 @@ export const useAppStore = create<AppState>()(
       set({ isTransactionPending: false, hasUnsavedChanges: true });
       get().addNotification({
         type: 'success',
-        message: `Transaction sent successfully`
+        message: `Transaction sent: ${tx.hash.slice(0, 10)}...`
       });
+      
+      // Refresh balance after transaction
+      setTimeout(() => {
+        get().refreshWalletBalance();
+      }, 2000);
       
       get().refreshData();
     } catch (error) {
+      console.error('Transaction failed:', error);
       set({ isTransactionPending: false });
-      get().addNotification({
-        type: 'error',
-        message: `Transaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-      });
+      
+      const errorInfo = get().handleTransactionError(error);
+      get().addNotification(errorInfo);
     }
   },
 
@@ -305,12 +480,21 @@ export const useAppStore = create<AppState>()(
   refreshWalletBalance: async () => {
     try {
       const walletService = WalletService.getInstance();
+      const currentWallet = get().wallet;
+      
+      if (!currentWallet) {
+        console.log('No wallet connected for balance refresh');
+        return;
+      }
+      
+      console.log('Refreshing wallet balance...');
       await walletService.refreshBalance();
       
       // Update the wallet state with new balance
       const connection = walletService.getConnection();
       if (connection) {
-        set({ wallet: connection });
+        console.log('Updating wallet state with new balance:', connection.balance);
+        set({ wallet: { ...connection } });
       }
     } catch (error) {
       console.error('Error refreshing wallet balance:', error);

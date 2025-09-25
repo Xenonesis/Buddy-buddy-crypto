@@ -25,9 +25,11 @@ const Send: React.FC = () => {
     register,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors, isValid },
     reset
   } = useForm<SendFormData>({
+    mode: 'onChange',
     defaultValues: {
       recipient: '',
       amount: '',
@@ -75,6 +77,8 @@ const Send: React.FC = () => {
   }, [watchedValues.recipient, watchedValues.amount, wallet]);
 
   const onSubmit = async (data: SendFormData) => {
+    console.log('Form submitted with data:', data);
+    
     if (!wallet) {
       addNotification({
         type: 'error',
@@ -83,12 +87,51 @@ const Send: React.FC = () => {
       return;
     }
 
+    // Validate that amount is not empty or zero
+    if (!data.amount || parseFloat(data.amount) <= 0) {
+      addNotification({
+        type: 'error',
+        message: 'Please enter a valid amount greater than 0'
+      });
+      return;
+    }
+
+    // Validate recipient address
+    if (!data.recipient || data.recipient.trim() === '') {
+      addNotification({
+        type: 'error',
+        message: 'Please enter a valid recipient address'
+      });
+      return;
+    }
+
     try {
+      console.log('Calling sendTransaction with:', data.recipient, data.amount);
       await sendTransaction(data.recipient, data.amount, false); // Always use regular transactions
+      
+      // Success - clear form and fee estimate
       reset();
       setEstimatedFee('0');
+      
+      addNotification({
+        type: 'success',
+        message: 'Transaction sent successfully! Check your wallet for confirmation.'
+      });
     } catch (error) {
       console.error('Transaction failed:', error);
+      
+      // The error handling is now done in the store's sendTransaction function
+      // but we can add some additional UI feedback here if needed
+      const errorObj = error as { code?: number | string; message?: string };
+      
+      // Don't show additional notification for user rejection as it's handled in store
+      if (!(errorObj?.code === 4001 || 
+           errorObj?.code === 'ACTION_REJECTED' || 
+           errorObj?.message?.includes('User denied') ||
+           errorObj?.message?.includes('user rejected'))) {
+        // Only log unexpected errors that aren't user rejections
+        console.warn('Unexpected transaction error that may need additional handling:', error);
+      }
     }
   };
 
@@ -139,7 +182,7 @@ const Send: React.FC = () => {
                 transition={{ delay: 0.1 }}
                 className="space-y-2"
               >
-                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                <label htmlFor="recipient" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                   Recipient Address
                 </label>
                 <div className="relative">
@@ -147,6 +190,7 @@ const Send: React.FC = () => {
                     <User size={16} className="text-muted-foreground" />
                   </div>
                   <Input
+                    id="recipient"
                     {...register('recipient', { 
                       required: 'Recipient address is required',
                       validate: validateAddress
@@ -170,7 +214,7 @@ const Send: React.FC = () => {
                 transition={{ delay: 0.2 }}
                 className="space-y-2"
               >
-                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                <label htmlFor="amount" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                   Amount (ETH)
                 </label>
                 <div className="relative">
@@ -178,12 +222,14 @@ const Send: React.FC = () => {
                     <DollarSign size={16} className="text-muted-foreground" />
                   </div>
                   <Input
+                    id="amount"
                     {...register('amount', {
                       required: 'Amount is required',
                       validate: validateAmount
                     })}
                     type="number"
                     step="0.000001"
+                    min="0"
                     placeholder="0.00"
                     className="pl-10"
                   />
@@ -203,9 +249,12 @@ const Send: React.FC = () => {
                       variant="ghost"
                       size="sm"
                       onClick={() => {
-                        const maxAmount = (parseFloat(wallet.balance) * 0.99).toFixed(4);
-                        const form = document.querySelector('input[name="amount"]') as HTMLInputElement;
-                        if (form) form.value = maxAmount;
+                        const maxAmount = (parseFloat(wallet.balance) * 0.99).toFixed(6);
+                        setValue('amount', maxAmount, {
+                          shouldValidate: true,
+                          shouldDirty: true,
+                          shouldTouch: true
+                        });
                       }}
                     >
                       Max

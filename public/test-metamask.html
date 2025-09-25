@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MetaMask Connection Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        .warning { background-color: #fff3cd; color: #856404; }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #6c757d; cursor: not-allowed; }
+        pre { background-color: #f8f9fa; padding: 10px; border-radius: 5px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🦊 MetaMask Connection Test</h1>
+    
+    <div id="status" class="status info">Ready to test...</div>
+    
+    <div>
+        <button onclick="checkMetaMask()">Check MetaMask</button>
+        <button onclick="checkAccounts()">Check Existing Accounts</button>
+        <button onclick="requestConnection()">Request Connection</button>
+        <button onclick="getAccountInfo()">Get Account Info</button>
+        <button onclick="clearLogs()">Clear Logs</button>
+    </div>
+    
+    <h3>Connection Details:</h3>
+    <pre id="details">No connection details yet...</pre>
+    
+    <h3>Console Logs:</h3>
+    <pre id="logs"></pre>
+
+    <script>
+        let logs = [];
+        
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            logs.push(`[${timestamp}] ${type.toUpperCase()}: ${message}`);
+            document.getElementById('logs').textContent = logs.join('\n');
+            console.log(`${type.toUpperCase()}: ${message}`);
+        }
+        
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+            log(message, type);
+        }
+        
+        function updateDetails(details) {
+            document.getElementById('details').textContent = JSON.stringify(details, null, 2);
+        }
+        
+        function clearLogs() {
+            logs = [];
+            document.getElementById('logs').textContent = '';
+            document.getElementById('details').textContent = 'No connection details yet...';
+        }
+        
+        async function checkMetaMask() {
+            log('Checking MetaMask availability...');
+            
+            if (typeof window.ethereum !== 'undefined') {
+                updateStatus('✅ MetaMask detected!', 'success');
+                
+                // Check if it's actually MetaMask
+                if (window.ethereum.isMetaMask) {
+                    log('Confirmed: This is MetaMask');
+                } else {
+                    log('Warning: ethereum object found but may not be MetaMask', 'warning');
+                }
+                
+                // Check provider info
+                try {
+                    const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+                    log(`Current chain ID: ${chainId} (${parseInt(chainId, 16)})`);
+                } catch (error) {
+                    log(`Error getting chain ID: ${error.message}`, 'error');
+                }
+            } else {
+                updateStatus('❌ MetaMask not found! Please install MetaMask extension.', 'error');
+            }
+        }
+        
+        async function checkAccounts() {
+            if (!window.ethereum) {
+                updateStatus('❌ MetaMask not available', 'error');
+                return;
+            }
+            
+            try {
+                log('Checking existing accounts...');
+                const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+                
+                if (accounts.length > 0) {
+                    updateStatus(`✅ Found ${accounts.length} connected account(s)`, 'success');
+                    updateDetails({ accounts, connected: true });
+                    log(`Connected accounts: ${accounts.join(', ')}`);
+                } else {
+                    updateStatus('⚠️ No accounts connected', 'warning');
+                    updateDetails({ accounts: [], connected: false });
+                    log('No accounts found - user needs to connect manually');
+                }
+            } catch (error) {
+                updateStatus(`❌ Error checking accounts: ${error.message}`, 'error');
+                log(`Error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function requestConnection() {
+            if (!window.ethereum) {
+                updateStatus('❌ MetaMask not available', 'error');
+                return;
+            }
+            
+            try {
+                log('Requesting account access...');
+                updateStatus('🔄 Requesting connection...', 'info');
+                
+                const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                
+                if (accounts.length > 0) {
+                    updateStatus(`✅ Connected to ${accounts[0]}`, 'success');
+                    updateDetails({ accounts, connected: true });
+                    log(`Successfully connected to: ${accounts[0]}`);
+                } else {
+                    updateStatus('❌ No accounts returned', 'error');
+                }
+            } catch (error) {
+                if (error.code === 4001) {
+                    updateStatus('❌ User rejected the connection request', 'error');
+                    log('User denied account access');
+                } else {
+                    updateStatus(`❌ Connection error: ${error.message}`, 'error');
+                    log(`Connection error: ${error.message}`, 'error');
+                }
+            }
+        }
+        
+        async function getAccountInfo() {
+            if (!window.ethereum) {
+                updateStatus('❌ MetaMask not available', 'error');
+                return;
+            }
+            
+            try {
+                log('Getting detailed account information...');
+                
+                const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+                if (accounts.length === 0) {
+                    updateStatus('⚠️ No accounts connected', 'warning');
+                    return;
+                }
+                
+                const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+                const balance = await window.ethereum.request({
+                    method: 'eth_getBalance',
+                    params: [accounts[0], 'latest']
+                });
+                
+                const balanceInEth = parseInt(balance, 16) / Math.pow(10, 18);
+                
+                const info = {
+                    address: accounts[0],
+                    chainId: chainId,
+                    chainIdDecimal: parseInt(chainId, 16),
+                    balance: balance,
+                    balanceInEth: balanceInEth.toFixed(6)
+                };
+                
+                updateStatus('✅ Account info retrieved', 'success');
+                updateDetails(info);
+                log(`Retrieved info for ${accounts[0]}`);
+            } catch (error) {
+                updateStatus(`❌ Error getting account info: ${error.message}`, 'error');
+                log(`Error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Initialize page
+        window.addEventListener('load', () => {
+            log('Page loaded, starting MetaMask test...');
+            checkMetaMask();
+        });
+        
+        // Listen for account changes
+        if (window.ethereum) {
+            window.ethereum.on('accountsChanged', (accounts) => {
+                log(`Accounts changed: ${accounts.join(', ')}`);
+                if (accounts.length === 0) {
+                    updateStatus('🔌 MetaMask disconnected', 'warning');
+                    updateDetails({ connected: false, accounts: [] });
+                }
+            });
+            
+            window.ethereum.on('chainChanged', (chainId) => {
+                log(`Chain changed to: ${chainId} (${parseInt(chainId, 16)})`);
+            });
+        }
+    </script>
+</body>
+</html>

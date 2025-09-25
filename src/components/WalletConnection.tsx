@@ -4,7 +4,7 @@ import { Wallet, ChevronDown, LogOut, Copy, ExternalLink } from 'lucide-react';
 import { useAppStore } from '../store/app';
 
 const WalletConnection: React.FC = () => {
-  const { wallet, isConnecting, connectWallet, disconnectWallet } = useAppStore();
+  const { wallet, isConnecting, connectWallet, disconnectWallet, connectionStatus, connectionMessage } = useAppStore();
   const [showProviders, setShowProviders] = React.useState(false);
   const [showWalletMenu, setShowWalletMenu] = React.useState(false);
 
@@ -97,21 +97,56 @@ const WalletConnection: React.FC = () => {
     );
   }
 
+  const getButtonColor = () => {
+    switch (connectionStatus) {
+      case 'connecting':
+        return 'bg-yellow-500 hover:bg-yellow-600';
+      case 'error':
+        return 'bg-red-500 hover:bg-red-600';
+      case 'disconnected':
+        return 'bg-primary-500 hover:bg-primary-600';
+      default:
+        return 'bg-primary-500 hover:bg-primary-600';
+    }
+  };
+
+  const getButtonText = () => {
+    if (isConnecting) return 'Connecting...';
+    if (connectionStatus === 'connecting') return 'Connecting...';
+    if (connectionStatus === 'error') return 'Connection Failed';
+    return 'Connect Wallet';
+  };
+
   return (
     <div className="space-y-3">
       <motion.button
         whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.98 }}
         onClick={() => setShowProviders(!showProviders)}
-        disabled={isConnecting}
-        className="w-full flex items-center justify-center space-x-2 p-3 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        disabled={isConnecting || connectionStatus === 'connecting'}
+        className={`w-full flex items-center justify-center space-x-2 p-3 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${getButtonColor()}`}
       >
         <Wallet size={20} />
         <span className="font-medium">
-          {isConnecting ? 'Connecting...' : 'Connect Wallet'}
+          {getButtonText()}
         </span>
-        {!isConnecting && <ChevronDown size={16} className={`transition-transform ${showProviders ? 'rotate-180' : ''}`} />}
+        {!isConnecting && connectionStatus !== 'connecting' && (
+          <ChevronDown size={16} className={`transition-transform ${showProviders ? 'rotate-180' : ''}`} />
+        )}
       </motion.button>
+
+      {/* Connection status message */}
+      {connectionMessage && connectionStatus !== 'connected' && (
+        <div className={`text-sm text-center px-3 py-2 rounded-lg ${
+          connectionStatus === 'error' 
+            ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+            : connectionStatus === 'connecting'
+            ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
+            : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+        }`}>
+          {connectionMessage}
+        </div>
+      )}
 
       {showProviders && (
         <motion.div

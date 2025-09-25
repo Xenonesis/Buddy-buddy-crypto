@@ -11,22 +11,25 @@ import RefreshProtection from './components/RefreshProtection';
 import WebSocketService from './services/websocket';
 
 function App() {
-  const { activeTab, wallet, restoreStateFromDatabase } = useAppStore();
+  const { activeTab, wallet, restoreStateFromDatabase, autoReconnectWallet } = useAppStore();
 
-  // Initialize WebSocket service and restore state
+  // Initialize WebSocket service and attempt auto-reconnection
   useEffect(() => {
-    const wsService = WebSocketService.getInstance();
-    wsService.connect().catch(console.error);
+    const initializeApp = async () => {
+      const wsService = WebSocketService.getInstance();
+      await wsService.connect().catch(console.error);
 
-    // Restore state if wallet was previously connected
-    if (wallet) {
-      restoreStateFromDatabase().catch(console.error);
-    }
+      // Attempt to auto-reconnect to MetaMask if it was previously connected
+      await autoReconnectWallet();
+    };
+
+    initializeApp();
 
     return () => {
+      const wsService = WebSocketService.getInstance();
       wsService.disconnect();
     };
-  }, []);
+  }, [autoReconnectWallet]);
 
   // Restore state when wallet reconnects
   useEffect(() => {
