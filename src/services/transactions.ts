@@ -79,20 +79,29 @@ class TransactionService {
         return;
       }
 
-      this.transactions = data.map(tx => ({
-        id: tx.id,
-        hash: tx.hash,
-        from: tx.from_address,
-        to: tx.to_address,
-        amount: tx.value,
-        token: 'ETH', // Assuming ETH for now
-        timestamp: new Date(tx.timestamp).getTime(),
-        status: tx.status as Transaction['status'],
-        gasUsed: tx.gas_limit,
-        gasPrice: tx.gas_price,
-        isGasless: false, // Default to false
-        network: 'Polygon Mainnet' // Default network
-      }));
+      if (data && data.length > 0) {
+        this.transactions = data.map(tx => ({
+          id: tx.id.toString(), // Ensure ID is a string
+          hash: tx.hash || '',
+          from: tx.from_address || '',
+          to: tx.to_address || '',
+          amount: tx.value || '0',
+          token: 'ETH', // Assuming ETH for now
+          timestamp: new Date(tx.timestamp).getTime(),
+          status: tx.status as Transaction['status'],
+          gasUsed: tx.gas_limit || '0',
+          gasPrice: tx.gas_price || '0',
+          isGasless: tx.is_gasless || false, // Use database field if available
+          network: tx.network || 'Polygon Mainnet' // Use database field if available
+        }));
+        
+        console.log(`Loaded ${this.transactions.length} transactions from database`);
+        
+        // Also save to localStorage for offline access
+        this.saveTransactions();
+      } else {
+        console.log('No transactions found in database');
+      }
     } catch (error) {
       console.error('Error loading transactions from database:', error);
     }
@@ -110,6 +119,12 @@ class TransactionService {
     this.monitoringInterval = setInterval(async () => {
       await this.checkPendingTransactions();
       await this.scanForNewTransactions();
+      
+      // Run full sync every 5 minutes (20 cycles * 15 seconds)
+      if (Math.random() < 0.05) { // ~5% chance each cycle = roughly every 5 minutes
+        console.log('Running periodic transaction sync...');
+        await this.syncAllTransactionStatuses();
+      }
     }, 15000); // Check every 15 seconds (reduced frequency to avoid rate limiting)
 
     console.log('Transaction monitoring started');
@@ -200,13 +215,48 @@ class TransactionService {
       try {
         const receipt = await connection.provider.getTransactionReceipt(tx.hash);
         if (receipt) {
-          tx.status = receipt.status === 1 ? 'confirmed' : 'failed';
-          tx.gasUsed = receipt.gasUsed.toString();
+          const newStatus = receipt.status === 1 ? 'confirmed' : 'failed';
+          const newGasUsed = receipt.gasUsed.toString();
+          
+          // Update local state
+          tx.status = newStatus;
+          tx.gasUsed = newGasUsed;
+          
+          // Update database
+          await this.updateTransactionInDatabase(tx.hash, newStatus, newGasUsed);
+          
+          // Save to localStorage
           this.saveTransactions();
+          
+          console.log(`Transaction ${tx.hash} status updated to ${newStatus}`);
         }
       } catch (error) {
         console.error(`Error checking transaction ${tx.hash}:`, error);
       }
+    }
+  }
+
+  // Update transaction status in database
+  private async updateTransactionInDatabase(hash: string, status: string, gasUsed?: string): Promise<void> {
+    if (!this.currentUserId) return;
+
+    try {
+      const updateData: any = { status };
+      if (gasUsed) {
+        updateData.gas_limit = gasUsed;
+      }
+
+      const { error } = await supabase
+        .from('transactions')
+        .update(updateData)
+        .eq('user_id', this.currentUserId)
+        .eq('hash', hash);
+
+      if (error) {
+        console.error('Error updating transaction in database:', error);
+      }
+    } catch (error) {
+      console.error('Error updating transaction in database:', error);
     }
   }
 
@@ -274,7 +324,23 @@ class TransactionService {
     try {
       // Check if we already have this transaction
       const existingTx = this.transactions.find(t => t.hash === tx.hash);
-      if (existingTx) return;
+      if (existingTx) {
+        // Check if we need to update the status of existing transaction
+        const receipt = await connection.provider.getTransactionReceipt(tx.hash);
+        if (receipt && existingTx.status === 'pending') {
+          const newStatus = receipt.status === 1 ? 'confirmed' : 'failed';
+          const newGasUsed = receipt.gasUsed.toString();
+          
+          existingTx.status = newStatus;
+          existingTx.gasUsed = newGasUsed;
+          
+          await this.updateTransactionInDatabase(tx.hash, newStatus, newGasUsed);
+          this.saveTransactions();
+          
+          console.log(`Existing transaction ${tx.hash} status updated to ${newStatus}`);
+        }
+        return;
+      }
 
       // Get transaction receipt for more details
       const receipt = await connection.provider.getTransactionReceipt(tx.hash);
@@ -405,6 +471,59 @@ class TransactionService {
     const networks = this.walletService.getSupportedNetworks();
     const network = networks.find(n => n.chainId === chainId);
     return network?.name || 'Unknown Network';
+  }
+
+  // Sync all transaction statuses with blockchain and database
+  async syncAllTransactionStatuses(): Promise<void> {
+    const connection = this.walletService.getConnection();
+    if (!connection || !connection.provider) {
+      console.log('No wallet connection available for sync');
+      return;
+    }
+
+    console.log('Starting transaction status sync...');
+    let updatedCount = 0;
+
+    for (const tx of this.transactions) {
+      if (!tx.hash) continue;
+
+      try {
+        const receipt = await connection.provider.getTransactionReceipt(tx.hash);
+        if (receipt) {
+          const blockchainStatus = receipt.status === 1 ? 'confirmed' : 'failed';
+          const blockchainGasUsed = receipt.gasUsed.toString();
+          
+          // Check if status needs updating
+          if (tx.status !== blockchainStatus || tx.gasUsed !== blockchainGasUsed) {
+            console.log(`Syncing transaction ${tx.hash}: ${tx.status} -> ${blockchainStatus}`);
+            
+            // Update local state
+            tx.status = blockchainStatus;
+            tx.gasUsed = blockchainGasUsed;
+            
+            // Update database
+            await this.updateTransactionInDatabase(tx.hash, blockchainStatus, blockchainGasUsed);
+            
+            updatedCount++;
+          }
+        }
+      } catch (error) {
+        console.error(`Error syncing transaction ${tx.hash}:`, error);
+      }
+    }
+
+    // Save updated transactions to localStorage
+    if (updatedCount > 0) {
+      this.saveTransactions();
+      console.log(`Sync completed: ${updatedCount} transactions updated`);
+    } else {
+      console.log('Sync completed: All transactions already up to date');
+    }
+  }
+
+  // Public method to manually sync transaction statuses
+  async manualSyncTransactions(): Promise<void> {
+    await this.syncAllTransactionStatuses();
   }
 
   // Clear all transactions (for testing/reset)

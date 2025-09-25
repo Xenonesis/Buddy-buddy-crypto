@@ -9,15 +9,15 @@ const WebSocketDemo: React.FC = () => {
   const [testHash, setTestHash] = useState('0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef');
   const wsService = WebSocketService.getInstance();
 
-  const sendTestTransactionUpdate = () => {
-    // This would normally come from the WebSocket server
-    // but for demo purposes, we'll simulate it
-    console.log('Test transaction update functionality would be triggered from server');
+  const testWebSocketConnection = () => {
+    // Test the WebSocket connection status
+    const connectionState = wsService.getConnectionState();
+    console.log('WebSocket connection test:', connectionState);
   };
 
-  const sendTestBalanceUpdate = () => {
-    // This would normally come from the WebSocket server
-    console.log('Test balance update functionality would be triggered from server');
+  const checkActiveSubscriptions = () => {
+    // Check current active subscriptions
+    console.log('Checking active WebSocket subscriptions');
   };
 
   const requestRealTimeUpdates = () => {
@@ -46,7 +46,7 @@ const WebSocketDemo: React.FC = () => {
     <div className="p-6 space-y-6">
       <div className="bg-white rounded-lg shadow-lg p-6">
         <h2 className="text-2xl font-bold text-gray-900 mb-4">
-          WebSocket Integration Demo
+          WebSocket Integration Testing
         </h2>
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -117,10 +117,10 @@ const WebSocketDemo: React.FC = () => {
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                onClick={sendTestTransactionUpdate}
+                onClick={testWebSocketConnection}
                 className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
               >
-                Test TX Update
+                Test Connection
               </motion.button>
             </div>
           </div>

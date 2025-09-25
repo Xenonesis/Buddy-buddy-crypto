@@ -11,17 +11,34 @@ import {
   ExternalLink,
   Clock,
   CheckCircle,
-  XCircle
+  XCircle,
+  RefreshCw
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useAppStore } from '../store/app';
 import { Transaction } from '../types';
+import TransactionService from '../services/transactions';
 
 const TransactionList: React.FC = () => {
   const { transactions } = useAppStore();
   const [filter, setFilter] = React.useState<'all' | 'gasless' | 'regular'>('all');
   const [statusFilter, setStatusFilter] = React.useState<'all' | 'confirmed' | 'pending' | 'failed'>('all');
   const [searchTerm, setSearchTerm] = React.useState('');
+  const [isSyncing, setIsSyncing] = React.useState(false);
+
+  const handleSyncTransactions = async () => {
+    setIsSyncing(true);
+    try {
+      const transactionService = TransactionService.getInstance();
+      await transactionService.manualSyncTransactions();
+      // Refresh the transactions in the store
+      window.location.reload(); // Simple refresh - you might want to use a more elegant state update
+    } catch (error) {
+      console.error('Error syncing transactions:', error);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const filteredTransactions = React.useMemo(() => {
     return transactions.filter(tx => {
@@ -76,15 +93,28 @@ const TransactionList: React.FC = () => {
           </p>
         </div>
         
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={exportTransactions}
-          className="flex items-center space-x-2 bg-secondary-500 hover:bg-secondary-600 text-white font-medium py-2 px-4 rounded-lg transition-colors"
-        >
-          <Download size={20} />
-          <span>Export CSV</span>
-        </motion.button>
+        <div className="flex items-center space-x-3">
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={handleSyncTransactions}
+            disabled={isSyncing}
+            className="flex items-center space-x-2 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+          >
+            <RefreshCw size={20} className={isSyncing ? 'animate-spin' : ''} />
+            <span>{isSyncing ? 'Syncing...' : 'Sync Status'}</span>
+          </motion.button>
+          
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={exportTransactions}
+            className="flex items-center space-x-2 bg-secondary-500 hover:bg-secondary-600 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+          >
+            <Download size={20} />
+            <span>Export CSV</span>
+          </motion.button>
+        </div>
       </div>
 
       {/* Filters */}
