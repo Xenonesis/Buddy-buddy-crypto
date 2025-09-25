@@ -119,41 +119,64 @@ export const useAppStore = create<AppState>((set, get) => ({
       
       let transaction: Transaction;
       
-      if (useGasless) {
-        if (!nitroLiteService.isGaslessAvailable()) {
-          throw new Error('Gasless transactions are not available on this network or NitroLite is not properly configured');
-        }
-        transaction = await nitroLiteService.executeGaslessTransfer(to, amount);
-      } else {
-        // Execute regular blockchain transaction
-        const walletService = WalletService.getInstance();
-        const connection = walletService.getConnection();
-        
-        if (!connection || !connection.provider) {
-          throw new Error('Wallet not connected');
-        }
-
-        const provider = new (await import('ethers')).ethers.BrowserProvider(window.ethereum);
-        const signer = await provider.getSigner();
-        
-        const tx = await signer.sendTransaction({
-          to,
-          value: (await import('ethers')).ethers.parseEther(amount)
-        });
-
-        transaction = {
-          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-          hash: tx.hash,
-          from: connection.address,
-          to,
-          amount,
-          token: 'ETH',
-          timestamp: Date.now(),
-          status: 'pending',
-          isGasless: false,
-          network: walletService.getSupportedNetworks().find(n => n.chainId === connection.chainId)?.name || 'Unknown'
-        };
+      // Always use regular transactions since gasless infrastructure isn't deployed
+      const walletService = WalletService.getInstance();
+      const connection = walletService.getConnection();
+      
+      if (!connection || !connection.provider) {
+        throw new Error('Wallet not connected');
       }
+
+      // Validate amount
+      const amountWei = (await import('ethers')).ethers.parseEther(amount);
+      const balanceWei = (await import('ethers')).ethers.parseEther(connection.balance);
+      
+      if (amountWei > balanceWei) {
+        throw new Error('Insufficient balance for this transaction');
+      }
+
+      // Create provider and signer
+      const provider = new (await import('ethers')).ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      
+      // Get current gas price for better UX
+      const feeData = await provider.getFeeData();
+      const gasLimit = 21000; // Standard ETH transfer
+      const gasPrice = feeData.gasPrice;
+      
+      if (!gasPrice) {
+        throw new Error('Unable to estimate gas price');
+      }
+
+      const gasCost = BigInt(gasLimit) * gasPrice;
+      const totalCost = amountWei + gasCost;
+      
+      if (totalCost > balanceWei) {
+        throw new Error('Insufficient balance to cover transaction amount and gas fees');
+      }
+
+      // Send the transaction
+      const tx = await signer.sendTransaction({
+        to,
+        value: amountWei,
+        gasLimit,
+        gasPrice
+      });
+
+      transaction = {
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        hash: tx.hash,
+        from: connection.address,
+        to,
+        amount,
+        token: 'ETH',
+        timestamp: Date.now(),
+        status: 'pending',
+        isGasless: false, // Always false since we're not using gasless
+        gasUsed: gasLimit.toString(),
+        gasPrice: gasPrice.toString(),
+        network: walletService.getSupportedNetworks().find(n => n.chainId === connection.chainId)?.name || 'Unknown'
+      };
       
       transactionService.addTransaction(transaction);
       

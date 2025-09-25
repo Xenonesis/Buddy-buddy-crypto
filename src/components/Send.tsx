@@ -43,27 +43,31 @@ const Send: React.FC = () => {
     const estimateFee = async () => {
       if (watchedValues.recipient && watchedValues.amount && parseFloat(watchedValues.amount) > 0) {
         try {
-          const nitroLiteService = NitroLiteService.getInstance();
-          if (watchedValues.useGasless && isGaslessAvailable) {
-            const fee = await nitroLiteService.estimateGaslessTransactionFee(
-              watchedValues.recipient,
-              watchedValues.amount
-            );
-            setEstimatedFee(fee);
+          // Since gasless is disabled, always calculate regular gas fees
+          if (wallet && wallet.provider) {
+            const { ethers } = await import('ethers');
+            const provider = wallet.provider;
+            const feeData = await provider.getFeeData();
+            const gasLimit = 21000; // Standard ETH transfer
+            const gasPrice = feeData.gasPrice || ethers.parseUnits('20', 'gwei');
+            const gasCost = BigInt(gasLimit) * gasPrice;
+            setEstimatedFee(ethers.formatEther(gasCost));
           } else {
-            // Estimate regular gas fee
-            setEstimatedFee('0.002'); // Simulated regular gas fee
+            // Fallback estimate
+            setEstimatedFee('0.002');
           }
         } catch (error) {
           console.error('Fee estimation failed:', error);
-          setEstimatedFee('0');
+          setEstimatedFee('0.002'); // Safe fallback
         }
+      } else {
+        setEstimatedFee('0');
       }
     };
 
     const debounceTimer = setTimeout(estimateFee, 500);
     return () => clearTimeout(debounceTimer);
-  }, [watchedValues.recipient, watchedValues.amount, watchedValues.useGasless, isGaslessAvailable]);
+  }, [watchedValues.recipient, watchedValues.amount, wallet]);
 
   const onSubmit = async (data: SendFormData) => {
     if (!wallet) {
@@ -75,7 +79,7 @@ const Send: React.FC = () => {
     }
 
     try {
-      await sendTransaction(data.recipient, data.amount, data.useGasless);
+      await sendTransaction(data.recipient, data.amount, false); // Always use regular transactions
       reset();
       setEstimatedFee('0');
     } catch (error) {
@@ -117,7 +121,7 @@ const Send: React.FC = () => {
                 Send Cryptocurrency
               </h1>
               <p className="text-gray-600 dark:text-gray-400">
-                Send ETH instantly with zero gas fees using NitroLite protocol
+                Send ETH with smart transaction management and fee optimization
               </p>
             </div>
           </div>
@@ -185,42 +189,15 @@ const Send: React.FC = () => {
             )}
           </div>
 
-          {/* Gasless Option */}
-          <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 bg-purple-100 dark:bg-purple-900 rounded-lg">
-                  <Zap size={20} className="text-purple-600 dark:text-purple-400" />
-                </div>
-                <div>
-                  <h3 className="font-medium text-gray-900 dark:text-white">
-                    Gasless Transaction
-                  </h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Use NitroLite protocol for zero gas fees
-                  </p>
-                </div>
-              </div>
-              
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  {...register('useGasless')}
-                  type="checkbox"
-                  disabled={!isGaslessAvailable}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary-600 peer-disabled:opacity-50"></div>
-              </label>
+          {/* Transaction Type Info */}
+          <div className="bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-700">
+            <div className="flex items-center space-x-2 mb-2">
+              <DollarSign size={16} className="text-blue-600" />
+              <span className="font-medium text-blue-900 dark:text-blue-100">Regular Transaction</span>
             </div>
-            
-            {!isGaslessAvailable && (
-              <div className="mt-3 flex items-center space-x-2 text-yellow-600 dark:text-yellow-400">
-                <AlertTriangle size={16} />
-                <span className="text-sm">
-                  Gasless transactions not available on current network
-                </span>
-              </div>
-            )}
+            <p className="text-sm text-blue-700 dark:text-blue-300">
+              Standard blockchain transaction with network gas fees. Gasless transactions are currently unavailable.
+            </p>
           </div>
 
           {/* Transaction Summary */}
@@ -243,14 +220,14 @@ const Send: React.FC = () => {
                 <div className="flex justify-between">
                   <span className="text-blue-700 dark:text-blue-300">Network Fee:</span>
                   <span className="font-medium text-blue-900 dark:text-blue-100">
-                    {watchedValues.useGasless ? '0 ETH (Gasless)' : `${estimatedFee} ETH`}
+                    {estimatedFee} ETH
                   </span>
                 </div>
                 <div className="border-t border-blue-200 dark:border-blue-700 pt-2">
                   <div className="flex justify-between">
                     <span className="text-blue-700 dark:text-blue-300">Total:</span>
                     <span className="font-bold text-blue-900 dark:text-blue-100">
-                      {(parseFloat(watchedValues.amount) + (watchedValues.useGasless ? 0 : parseFloat(estimatedFee))).toFixed(6)} ETH
+                      {(parseFloat(watchedValues.amount) + parseFloat(estimatedFee)).toFixed(6)} ETH
                     </span>
                   </div>
                 </div>

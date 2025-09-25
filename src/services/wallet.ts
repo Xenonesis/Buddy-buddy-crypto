@@ -1,14 +1,17 @@
 import { ethers } from 'ethers';
 import { WalletConnection, NetworkConfig, WalletProvider } from '../types';
+import WebSocketService from './websocket';
 
 class WalletService {
   private static instance: WalletService;
   private provider: ethers.BrowserProvider | null = null;
   private signer: ethers.JsonRpcSigner | null = null;
   private connection: WalletConnection | null = null;
+  private readonly wsService: WebSocketService;
+  private balanceSubscriptionId: string | null = null;
 
   // Supported networks - using public RPC endpoints
-  private networks: Record<number, NetworkConfig> = {
+  private readonly networks: Record<number, NetworkConfig> = {
     1: {
       chainId: 1,
       name: 'Ethereum Mainnet',
@@ -24,8 +27,20 @@ class WalletService {
       explorerUrl: 'https://sepolia.etherscan.io',
       isTestnet: true,
       gaslessSupported: true
+    },
+    137: {
+      chainId: 137,
+      name: import.meta.env.VITE_NETWORK_NAME || 'Polygon Mainnet',
+      rpcUrl: import.meta.env.VITE_PUBLIC_RPC_URL || 'https://polygon-rpc.com',
+      explorerUrl: import.meta.env.VITE_BLOCK_EXPLORER_URL || 'https://polygonscan.com',
+      isTestnet: false,
+      gaslessSupported: true
     }
   };
+
+  constructor() {
+    this.wsService = WebSocketService.getInstance();
+  }
 
   static getInstance(): WalletService {
     if (!WalletService.instance) {
@@ -61,6 +76,9 @@ class WalletService {
       window.ethereum.on('accountsChanged', this.handleAccountsChanged.bind(this));
       window.ethereum.on('chainChanged', this.handleChainChanged.bind(this));
 
+      // Initialize WebSocket connection and subscribe to balance updates
+      this.initializeWebSocketConnection();
+
       return this.connection;
     } catch (error) {
       console.error('MetaMask connection failed:', error);
@@ -91,9 +109,10 @@ class WalletService {
         method: 'wallet_switchEthereumChain',
         params: [{ chainId: `0x${chainId.toString(16)}` }],
       });
-    } catch (switchError: any) {
+    } catch (switchError: unknown) {
       // This error code indicates that the chain has not been added to MetaMask
-      if (switchError.code === 4902) {
+      const error = switchError as { code?: number };
+      if (error.code === 4902) {
         await this.addNetwork(network);
       } else {
         throw switchError;
@@ -113,8 +132,8 @@ class WalletService {
         rpcUrls: [network.rpcUrl],
         blockExplorerUrls: [network.explorerUrl],
         nativeCurrency: {
-          name: 'ETH',
-          symbol: 'ETH',
+          name: network.chainId === 137 ? 'MATIC' : 'ETH',
+          symbol: network.chainId === 137 ? 'MATIC' : 'ETH',
           decimals: 18
         }
       }],
@@ -142,6 +161,9 @@ class WalletService {
 
   // Disconnect wallet
   disconnect(): void {
+    // Clean up WebSocket subscriptions
+    this.cleanupWebSocketSubscriptions();
+    
     this.provider = null;
     this.signer = null;
     this.connection = null;
@@ -162,7 +184,12 @@ class WalletService {
     if (accounts.length === 0) {
       this.disconnect();
     } else if (this.connection) {
+      // Update connection address
       this.connection.address = accounts[0];
+      
+      // Update WebSocket subscriptions for new address
+      this.cleanupWebSocketSubscriptions();
+      this.initializeWebSocketConnection();
     }
   }
 
@@ -170,6 +197,40 @@ class WalletService {
     const numericChainId = parseInt(chainId, 16);
     if (this.connection) {
       this.connection.chainId = numericChainId;
+    }
+  }
+
+  // Initialize WebSocket connection and subscriptions
+  private async initializeWebSocketConnection(): Promise<void> {
+    try {
+      // Connect to WebSocket if not already connected
+      if (this.wsService.getStatus() === 'disconnected') {
+        await this.wsService.connect();
+      }
+
+      // Subscribe to balance updates for the connected address
+      if (this.connection) {
+        this.balanceSubscriptionId = this.wsService.subscribe(
+          'balance_update',
+          (payload: { address: string; balance: string; token?: string }) => {
+            if (this.connection && payload.address === this.connection.address && !payload.token) {
+              this.connection.balance = payload.balance;
+              console.log('Balance updated via WebSocket:', payload.balance);
+            }
+          },
+          { address: this.connection.address }
+        );
+      }
+    } catch (error) {
+      console.warn('Failed to initialize WebSocket connection:', error);
+    }
+  }
+
+  // Clean up WebSocket subscriptions
+  private cleanupWebSocketSubscriptions(): void {
+    if (this.balanceSubscriptionId) {
+      this.wsService.unsubscribe(this.balanceSubscriptionId);
+      this.balanceSubscriptionId = null;
     }
   }
 
@@ -197,7 +258,11 @@ class WalletService {
 // Extend Window interface for TypeScript
 declare global {
   interface Window {
-    ethereum?: any;
+    ethereum?: {
+      request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+      on: (event: string, handler: (...args: unknown[]) => void) => void;
+      removeAllListeners: (event: string) => void;
+    };
   }
 }
 

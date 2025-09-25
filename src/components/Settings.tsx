@@ -82,7 +82,7 @@ const Settings: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `nitrobridge-backup-${Date.now()}.json`;
+    a.download = `budget-buddy-backup-${Date.now()}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -98,7 +98,7 @@ const Settings: React.FC = () => {
     if (window.confirm('Are you sure you want to clear all data? This action cannot be undone.')) {
       transactionService.clearTransactions();
       recurringService.clearPayments();
-      localStorage.removeItem('nitrobridge_settings');
+      localStorage.removeItem('budget_buddy_settings');
       
       addNotification({
         type: 'warning',
@@ -130,7 +130,7 @@ const Settings: React.FC = () => {
           Settings
         </h1>
         <p className="text-gray-600 dark:text-gray-400 mt-1">
-          Configure your NitroBridge preferences and security settings
+          Configure your Budget Buddy preferences and security settings
         </p>
       </div>
 
