@@ -17,6 +17,7 @@ import { useAppStore } from '../store/app';
 import WalletConnection from './WalletConnection';
 import Notifications from './Notifications';
 import WebSocketStatusIndicator from './WebSocketStatusIndicator';
+import DataSyncStatus from './DataSyncStatus';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -183,6 +184,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       {/* Notifications */}
       <Notifications />
+      
+      {/* Data Sync Status */}
+      <DataSyncStatus />
     </div>
   );
 };

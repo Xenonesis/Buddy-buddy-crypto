@@ -7,20 +7,33 @@ import Recurring from './components/Recurring';
 import TransactionList from './components/TransactionList';
 import Settings from './components/Settings';
 import { NitroliteRealTimeDemo } from './components/NitroliteRealTimeDemo';
+import RefreshProtection from './components/RefreshProtection';
 import WebSocketService from './services/websocket';
 
 function App() {
-  const { activeTab } = useAppStore();
+  const { activeTab, wallet, restoreStateFromDatabase } = useAppStore();
 
-  // Initialize WebSocket service
+  // Initialize WebSocket service and restore state
   useEffect(() => {
     const wsService = WebSocketService.getInstance();
     wsService.connect().catch(console.error);
+
+    // Restore state if wallet was previously connected
+    if (wallet) {
+      restoreStateFromDatabase().catch(console.error);
+    }
 
     return () => {
       wsService.disconnect();
     };
   }, []);
+
+  // Restore state when wallet reconnects
+  useEffect(() => {
+    if (wallet) {
+      restoreStateFromDatabase().catch(console.error);
+    }
+  }, [wallet, restoreStateFromDatabase]);
 
   const renderActiveComponent = () => {
     switch (activeTab) {
@@ -42,9 +55,11 @@ function App() {
   };
 
   return (
-    <Layout>
-      {renderActiveComponent()}
-    </Layout>
+    <RefreshProtection>
+      <Layout>
+        {renderActiveComponent()}
+      </Layout>
+    </RefreshProtection>
   );
 }
 
