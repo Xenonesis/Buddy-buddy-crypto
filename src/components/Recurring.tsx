@@ -9,12 +9,18 @@ import {
   Calendar,
   DollarSign,
   User,
-  MoreVertical
+  MoreVertical,
+  CheckCircle,
+  AlertCircle
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { format, addDays } from 'date-fns';
 import { useAppStore } from '../store/app';
 import { RecurringPayment } from '../types';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Badge } from './ui/badge';
 
 interface RecurringFormData {
   recipient: string;
@@ -85,76 +91,108 @@ const Recurring: React.FC = () => {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex items-center justify-between"
+      >
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          <h1 className="text-3xl font-bold text-foreground">
             Recurring Payments
           </h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
+          <p className="text-muted-foreground mt-1">
             Automate your payments with scheduled, gasless transactions
           </p>
         </div>
         
-        <motion.button
+        <motion.div
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          onClick={() => setShowCreateForm(true)}
-          className="flex items-center space-x-2 bg-primary-500 hover:bg-primary-600 text-white font-medium py-2 px-4 rounded-lg transition-colors"
         >
-          <Plus size={20} />
-          <span>New Payment</span>
-        </motion.button>
-      </div>
+          <Button
+            onClick={() => setShowCreateForm(true)}
+            className="bg-purple-500 hover:bg-purple-600"
+            size="lg"
+          >
+            <Plus className="mr-2 h-5 w-5" />
+            New Payment
+          </Button>
+        </motion.div>
+      </motion.div>
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-100 dark:border-gray-700">
-          <div className="flex items-center space-x-3">
-            <div className="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
-              <Play size={20} className="text-green-600 dark:text-green-400" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Active Payments</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                {activePayments.length}
-              </p>
-            </div>
-          </div>
-        </div>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center space-x-3">
+                <div className="p-3 bg-green-100 dark:bg-green-900 rounded-lg">
+                  <Play size={20} className="text-green-600 dark:text-green-400" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Active Payments</p>
+                  <p className="text-2xl font-bold text-foreground">
+                    {activePayments.length}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-100 dark:border-gray-700">
-          <div className="flex items-center space-x-3">
-            <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
-              <DollarSign size={20} className="text-blue-600 dark:text-blue-400" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Total Monthly</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                {activePayments
-                  .filter(p => p.frequency === 'monthly')
-                  .reduce((sum, p) => sum + parseFloat(p.amount), 0)
-                  .toFixed(4)} ETH
-              </p>
-            </div>
-          </div>
-        </div>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center space-x-3">
+                <div className="p-3 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                  <DollarSign size={20} className="text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Monthly</p>
+                  <p className="text-2xl font-bold text-foreground">
+                    {activePayments
+                      .filter(p => p.frequency === 'monthly')
+                      .reduce((sum, p) => sum + parseFloat(p.amount), 0)
+                      .toFixed(4)} ETH
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-100 dark:border-gray-700">
-          <div className="flex items-center space-x-3">
-            <div className="p-2 bg-purple-100 dark:bg-purple-900 rounded-lg">
-              <Calendar size={20} className="text-purple-600 dark:text-purple-400" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Next Payment</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                {activePayments.length > 0 
-                  ? getNextPaymentText(Math.min(...activePayments.map(p => p.nextPayment)))
-                  : 'None'
-                }
-              </p>
-            </div>
-          </div>
-        </div>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center space-x-3">
+                <div className="p-3 bg-purple-100 dark:bg-purple-900 rounded-lg">
+                  <Calendar size={20} className="text-purple-600 dark:text-purple-400" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Next Payment</p>
+                  <p className="text-2xl font-bold text-foreground">
+                    {activePayments.length > 0 
+                      ? getNextPaymentText(Math.min(...activePayments.map(p => p.nextPayment)))
+                      : 'None'
+                    }
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
 
       {/* Active Payments */}
