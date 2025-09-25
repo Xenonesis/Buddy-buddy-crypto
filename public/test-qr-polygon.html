@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code Test - Polygon Network</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .qr-code {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .qr-code canvas {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            padding: 10px;
+            background: white;
+        }
+        .uri-display {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            font-family: monospace;
+            word-break: break-all;
+            margin: 10px 0;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>QR Code Test - Polygon Network Payment</h1>
+        <p>This page generates test QR codes with Polygon network (Chain ID 137) to test the QR scanning functionality.</p>
+        
+        <div class="info">
+            <strong>Test Scenarios:</strong>
+            <ul>
+                <li>QR code with Polygon network (Chain ID 137)</li>
+                <li>QR code with specific amount and message</li>
+                <li>QR code with just wallet address and chain ID</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Test QR Code 1: Polygon Network with Amount</h2>
+        <p><strong>Scenario:</strong> Payment to a Polygon address with 0.1 MATIC and a message</p>
+        <div id="qr1" class="qr-code"></div>
+        <div class="uri-display" id="uri1"></div>
+        <button onclick="copyToClipboard('uri1')">Copy URI</button>
+    </div>
+
+    <div class="container">
+        <h2>Test QR Code 2: Polygon Network Address Only</h2>
+        <p><strong>Scenario:</strong> Just a Polygon address with chain ID (no amount)</p>
+        <div id="qr2" class="qr-code"></div>
+        <div class="uri-display" id="uri2"></div>
+        <button onclick="copyToClipboard('uri2')">Copy URI</button>
+    </div>
+
+    <div class="container">
+        <h2>Test QR Code 3: Polygon Network with Large Amount</h2>
+        <p><strong>Scenario:</strong> Payment with 5 MATIC to test network switching</p>
+        <div id="qr3" class="qr-code"></div>
+        <div class="uri-display" id="uri3"></div>
+        <button onclick="copyToClipboard('uri3')">Copy URI</button>
+    </div>
+
+    <div class="container">
+        <h2>Instructions</h2>
+        <ol>
+            <li>Open the Nitrolite app in another tab</li>
+            <li>Go to the QR Scan & Pay section</li>
+            <li>Click "Scan QR Code" → "Upload QR Image"</li>
+            <li>Right-click on any QR code above and save as image</li>
+            <li>Upload the saved QR code image to test network switching</li>
+            <li>Verify that the app properly detects Chain ID 137 and prompts for network switch if needed</li>
+        </ol>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <script>
+        // Test data
+        const testWalletAddress = "0x742d35Cc6634C0532925a3b8D28d8Be2607152B7"; // Example address
+        const polygonChainId = 137;
+
+        // Test QR Code 1: With amount and message
+        const uri1 = `ethereum:${testWalletAddress}@${polygonChainId}?value=${0.1 * 1e18}&message=${encodeURIComponent("Test payment for QR scanning")}`;
+        
+        // Test QR Code 2: Just address and chain ID
+        const uri2 = `ethereum:${testWalletAddress}@${polygonChainId}`;
+        
+        // Test QR Code 3: Large amount
+        const uri3 = `ethereum:${testWalletAddress}@${polygonChainId}?value=${5 * 1e18}&message=${encodeURIComponent("Large payment test")}`;
+
+        // Generate QR codes
+        function generateQRCode(elementId, uriElementId, uri) {
+            // Display URI
+            document.getElementById(uriElementId).textContent = uri;
+            
+            // Generate QR code
+            QRCode.toCanvas(document.getElementById(elementId), uri, {
+                width: 256,
+                margin: 2,
+                color: {
+                    dark: '#000000',
+                    light: '#FFFFFF'
+                }
+            }, function (error) {
+                if (error) console.error(error);
+                console.log('QR code generated for', elementId);
+            });
+        }
+
+        // Copy to clipboard function
+        function copyToClipboard(elementId) {
+            const text = document.getElementById(elementId).textContent;
+            navigator.clipboard.writeText(text).then(function() {
+                alert('URI copied to clipboard!');
+            }, function(err) {
+                console.error('Could not copy text: ', err);
+            });
+        }
+
+        // Generate all QR codes when page loads
+        window.onload = function() {
+            generateQRCode('qr1', 'uri1', uri1);
+            generateQRCode('qr2', 'uri2', uri2);
+            generateQRCode('qr3', 'uri3', uri3);
+        };
+    </script>
+</body>
+</html>

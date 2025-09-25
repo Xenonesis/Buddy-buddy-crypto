@@ -3,6 +3,7 @@ import { useAppStore } from './store/app';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import Send from './components/Send';
+import QRScanPay from './components/QRScanPay';
 import Recurring from './components/Recurring';
 import TransactionList from './components/TransactionList';
 import Settings from './components/Settings';
@@ -44,6 +45,8 @@ function App() {
         return <Dashboard />;
       case 'send':
         return <Send />;
+      case 'qr-scan-pay':
+        return <QRScanPay />;
       case 'recurring':
         return <Recurring />;
       case 'transactions':
