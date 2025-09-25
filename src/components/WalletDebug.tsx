@@ -1,11 +1,43 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAppStore } from '../store/app';
 import WalletService from '../services/wallet';
 
+interface DebugInfo {
+  hasWindow: boolean;
+  hasEthereum: boolean;
+  ethereumType: string;
+  isMetaMask?: boolean;
+  userAgent: string;
+  chainId?: string;
+  chainIdDecimal?: number;
+  chainIdError?: string;
+  accounts?: string[];
+  accountsCount?: number;
+  accountsError?: string;
+}
+
 const WalletDebug: React.FC = () => {
   const { wallet, connectionStatus, connectionMessage, connectWallet, autoReconnectWallet } = useAppStore();
-  const [debugInfo, setDebugInfo] = useState<any>({});
+  const [debugInfo, setDebugInfo] = useState<DebugInfo>({
+    hasWindow: false,
+    hasEthereum: false,
+    ethereumType: 'undefined',
+    userAgent: ''
+  });
   const [logs, setLogs] = useState<string[]>([]);
+
+  const getStatusClassName = (status: string): string => {
+    switch (status) {
+      case 'connected':
+        return 'bg-green-100 text-green-800';
+      case 'error':
+        return 'bg-red-100 text-red-800';
+      case 'connecting':
+        return 'bg-yellow-100 text-yellow-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
 
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
@@ -13,36 +45,36 @@ const WalletDebug: React.FC = () => {
     console.log(message);
   };
 
-  const checkEnvironment = async () => {
-    const info: any = {
+  const checkEnvironment = useCallback(async () => {
+    const info: DebugInfo = {
       hasWindow: typeof window !== 'undefined',
       hasEthereum: !!window.ethereum,
       ethereumType: typeof window.ethereum,
-      isMetaMask: window.ethereum?.isMetaMask,
+      isMetaMask: window.ethereum && 'isMetaMask' in window.ethereum ? (window.ethereum as { isMetaMask: boolean }).isMetaMask : undefined,
       userAgent: navigator.userAgent,
     };
 
     if (window.ethereum) {
       try {
-        const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+        const chainId = await window.ethereum.request({ method: 'eth_chainId' }) as string;
         info.chainId = chainId;
         info.chainIdDecimal = parseInt(chainId, 16);
       } catch (error) {
-        info.chainIdError = error.message;
+        info.chainIdError = (error as Error).message;
       }
 
       try {
-        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+        const accounts = await window.ethereum.request({ method: 'eth_accounts' }) as string[];
         info.accounts = accounts;
         info.accountsCount = accounts.length;
       } catch (error) {
-        info.accountsError = error.message;
+        info.accountsError = (error as Error).message;
       }
     }
 
     setDebugInfo(info);
     addLog('Environment check completed');
-  };
+  }, []);
 
   const testWalletService = async () => {
     const walletService = WalletService.getInstance();
@@ -78,7 +110,7 @@ const WalletDebug: React.FC = () => {
 
     try {
       addLog('Requesting accounts...');
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' }) as string[];
       addLog(`Success! Accounts: ${JSON.stringify(accounts)}`);
     } catch (error) {
       addLog(`Direct connection failed: ${error.message}`);
@@ -138,7 +170,7 @@ const WalletDebug: React.FC = () => {
 
   useEffect(() => {
     checkEnvironment();
-  }, []);
+  }, [checkEnvironment]);
 
   return (
     <div className="p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
@@ -147,12 +179,7 @@ const WalletDebug: React.FC = () => {
       {/* Current Status */}
       <div className="mb-4">
         <h4 className="font-semibold">Current Status:</h4>
-        <div className={`p-2 rounded text-sm ${
-          connectionStatus === 'connected' ? 'bg-green-100 text-green-800' :
-          connectionStatus === 'error' ? 'bg-red-100 text-red-800' :
-          connectionStatus === 'connecting' ? 'bg-yellow-100 text-yellow-800' :
-          'bg-gray-100 text-gray-800'
-        }`}>
+        <div className={`p-2 rounded text-sm ${getStatusClassName(connectionStatus)}`}>
           Status: {connectionStatus} | Message: {connectionMessage}
         </div>
         {wallet && (
@@ -222,8 +249,8 @@ const WalletDebug: React.FC = () => {
       <div>
         <h4 className="font-semibold">Logs:</h4>
         <div className="bg-black text-green-400 p-2 rounded text-xs max-h-40 overflow-y-auto">
-          {logs.length === 0 ? 'No logs yet...' : logs.map((log, index) => (
-            <div key={index}>{log}</div>
+          {logs.length === 0 ? 'No logs yet...' : logs.map((log) => (
+            <div key={log}>{log}</div>
           ))}
         </div>
         <button

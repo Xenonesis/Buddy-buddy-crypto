@@ -11,7 +11,8 @@ import {
   X,
   Sun,
   Moon,
-  Wifi
+  Wifi,
+  QrCode
 } from 'lucide-react';
 import { useAppStore } from '../store/app';
 import WalletConnection from './WalletConnection';
@@ -30,6 +31,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigationItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
     { id: 'send', label: 'Send', icon: Send },
+    { id: 'qr-scan-pay', label: 'QR Scan & Pay', icon: QrCode },
     { id: 'recurring', label: 'Recurring', icon: Clock },
     { id: 'transactions', label: 'Transactions', icon: Activity },
     { id: 'websocket', label: 'Nitrolite Live', icon: Wifi },
