@@ -4,7 +4,6 @@ import { WalletConnection, Transaction, RecurringPayment } from '../types';
 import WalletService from '../services/wallet';
 import TransactionService from '../services/transactions';
 import RecurringPaymentService from '../services/recurring';
-import NitroLiteService from '../services/nitrolite';
 
 interface AppState {
   // Wallet state
@@ -76,7 +75,7 @@ export const useAppStore = create<AppState>()(
     
     // Set up status change listener
     const unsubscribe = walletService.onStatusChange((status, message) => {
-      console.log('Wallet status changed:', status, message);
+
       set({ 
         connectionStatus: status,
         connectionMessage: message || ''
@@ -129,13 +128,13 @@ export const useAppStore = create<AppState>()(
   },
 
   autoReconnectWallet: async () => {
-    console.log('Attempting auto-reconnection...');
+
     
     const walletService = WalletService.getInstance();
     
     // Set up status change listener
     const unsubscribe = walletService.onStatusChange((status, message) => {
-      console.log('Auto-reconnect status change:', status, message);
+
       set({ 
         connectionStatus: status,
         connectionMessage: message || ''
@@ -145,7 +144,7 @@ export const useAppStore = create<AppState>()(
     try {
       // First check if MetaMask is available
       if (!window.ethereum) {
-        console.log('MetaMask not available');
+
         set({ 
           connectionStatus: 'disconnected',
           connectionMessage: 'MetaMask not installed'
@@ -156,7 +155,7 @@ export const useAppStore = create<AppState>()(
       const connection = await walletService.autoReconnect();
       
       if (connection) {
-        console.log('Auto-reconnection successful:', connection.address);
+
         
         const transactionService = TransactionService.getInstance();
         
@@ -181,7 +180,7 @@ export const useAppStore = create<AppState>()(
         // Refresh data after connection
         get().refreshData();
       } else {
-        console.log('Auto-reconnection failed: No connection returned');
+
         set({ 
           connectionStatus: 'disconnected',
           connectionMessage: 'MetaMask not connected'
@@ -277,7 +276,7 @@ export const useAppStore = create<AppState>()(
   },
 
   sendTransaction: async (to, amount, useGasless) => {
-    console.log('Starting transaction:', { to, amount, useGasless });
+
     set({ isTransactionPending: true });
     
     try {
@@ -293,7 +292,7 @@ export const useAppStore = create<AppState>()(
         throw new Error('MetaMask not available');
       }
 
-      console.log('Current wallet balance:', connection.balance);
+
 
       // Validate inputs
       if (!to || !amount) {
@@ -305,8 +304,7 @@ export const useAppStore = create<AppState>()(
       const amountWei = ethers.ethers.parseEther(amount);
       const balanceWei = ethers.ethers.parseEther(connection.balance);
       
-      console.log('Amount in Wei:', amountWei.toString());
-      console.log('Balance in Wei:', balanceWei.toString());
+
       
       if (amountWei > balanceWei) {
         throw new Error('Insufficient balance for this transaction');
@@ -321,19 +319,18 @@ export const useAppStore = create<AppState>()(
       const feeData = await provider.getFeeData();
       const gasPrice = feeData.gasPrice || ethers.ethers.parseUnits('20', 'gwei');
       
-      console.log('Gas price:', gasPrice.toString());
+
       
       const gasCost = gasLimit * gasPrice;
       const totalCost = amountWei + gasCost;
       
-      console.log('Gas cost:', ethers.ethers.formatEther(gasCost));
-      console.log('Total cost:', ethers.ethers.formatEther(totalCost));
+
       
       if (totalCost > balanceWei) {
         throw new Error(`Insufficient balance. Need ${ethers.ethers.formatEther(totalCost)} ETH but only have ${connection.balance} ETH`);
       }
 
-      console.log('Sending transaction...');
+
       
       // Send the transaction
       const tx = await signer.sendTransaction({
@@ -343,7 +340,7 @@ export const useAppStore = create<AppState>()(
         gasPrice
       });
 
-      console.log('Transaction sent:', tx.hash);
+
 
       const transaction: Transaction = {
         id: Date.now().toString() + Math.random().toString(36).substr(2, 9),

@@ -7,7 +7,6 @@ import QRScanPay from './components/QRScanPay';
 import Recurring from './components/Recurring';
 import TransactionList from './components/TransactionList';
 import Settings from './components/Settings';
-import { NitroliteRealTimeDemo } from './components/NitroliteRealTimeDemo';
 import RefreshProtection from './components/RefreshProtection';
 import WebSocketService from './services/websocket';
 
@@ -18,7 +17,7 @@ function App() {
   useEffect(() => {
     const initializeApp = async () => {
       const wsService = WebSocketService.getInstance();
-      await wsService.connect().catch(console.error);
+      await wsService.connect().catch(() => {});
 
       // Attempt to auto-reconnect to MetaMask if it was previously connected
       await autoReconnectWallet();
@@ -35,7 +34,7 @@ function App() {
   // Restore state when wallet reconnects
   useEffect(() => {
     if (wallet) {
-      restoreStateFromDatabase().catch(console.error);
+      restoreStateFromDatabase().catch(() => {});
     }
   }, [wallet, restoreStateFromDatabase]);
 
@@ -53,8 +52,6 @@ function App() {
         return <TransactionList />;
       case 'settings':
         return <Settings />;
-      case 'websocket':
-        return <NitroliteRealTimeDemo />;
       default:
         return <Dashboard />;
     }

@@ -184,15 +184,12 @@ class WalletService {
   // Refresh wallet balance
   async refreshBalance(): Promise<void> {
     if (!this.connection || !this.provider) {
-      console.log('Cannot refresh balance: no connection or provider');
       return;
     }
 
     try {
-      console.log('Refreshing balance for address:', this.connection.address);
       const balance = await this.provider.getBalance(this.connection.address);
       const formattedBalance = ethers.formatEther(balance);
-      console.log('New balance:', formattedBalance);
       
       this.connection.balance = formattedBalance;
       
@@ -222,17 +219,12 @@ class WalletService {
 
   // Check if MetaMask is connected without prompting user
   async checkConnection(): Promise<boolean> {
-    console.log('Checking connection - window.ethereum exists:', !!window.ethereum);
-    
     if (!window.ethereum) {
-      console.log('window.ethereum is not available');
       return false;
     }
 
     try {
-      console.log('Requesting eth_accounts...');
       const accounts = await window.ethereum.request({ method: 'eth_accounts' }) as string[];
-      console.log('eth_accounts response:', accounts);
       return accounts.length > 0;
     } catch (error) {
       console.error('Error checking MetaMask connection:', error);
@@ -242,18 +234,12 @@ class WalletService {
 
   // Attempt to reconnect automatically
   async autoReconnect(): Promise<WalletConnection | null> {
-    console.log('Starting autoReconnect...');
     try {
       const isConnected = await this.checkConnection();
-      console.log('Connection check result:', isConnected);
       
       if (isConnected) {
-        console.log('Connection found, attempting silent connection...');
         const connection = await this.connectMetaMask(true);
-        console.log('Silent connection result:', connection);
         return connection;
-      } else {
-        console.log('No existing connection found');
       }
       return null;
     } catch (error) {

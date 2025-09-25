@@ -11,7 +11,6 @@ import {
   X,
   Sun,
   Moon,
-  Wifi,
   QrCode
 } from 'lucide-react';
 import { useAppStore } from '../store/app';
@@ -34,7 +33,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { id: 'qr-scan-pay', label: 'QR Scan & Pay', icon: QrCode },
     { id: 'recurring', label: 'Recurring', icon: Clock },
     { id: 'transactions', label: 'Transactions', icon: Activity },
-    { id: 'websocket', label: 'Nitrolite Live', icon: Wifi },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
